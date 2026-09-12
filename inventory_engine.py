@@ -433,6 +433,9 @@ class WarehouseInventoryEngine:
                 WHERE sku_id = ? AND state_id = ?
             """, (closing_stock, day_index, sku_id, state_id))
             
+            r_imp_val = round(runway_impulse, 2) if runway_impulse is not None else None
+            r_sus_val = round(runway_sustained, 2) if runway_sustained is not None else None
+
             cursor.execute("""
                 INSERT OR REPLACE INTO inventory_daily_ledger
                 (day_index, sku_id, state_id, opening_stock, inbound_received, actual_demand, 
@@ -442,7 +445,7 @@ class WarehouseInventoryEngine:
             """, (
                 day_index, sku_id, state_id, opening_stock, inbound_received, actual_demand,
                 fulfilled_demand, unmet_demand, closing_stock, 1 if stockout_occurred else 0,
-                round(runway_impulse, 2), round(runway_sustained, 2), action_summary
+                r_imp_val, r_sus_val, action_summary
             ))
             
             conn.commit()
@@ -459,8 +462,8 @@ class WarehouseInventoryEngine:
                 "closing_stock": closing_stock,
                 "stockout_occurred": stockout_occurred,
                 "alert_tier": alert_tier,
-                "runway_impulse_days": round(runway_impulse, 2),
-                "runway_sustained_days": round(runway_sustained, 2),
+                "runway_impulse_days": r_imp_val,
+                "runway_sustained_days": r_sus_val,
                 "action_taken": action_summary
             }
 

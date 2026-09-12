@@ -132,7 +132,7 @@ class AnomalyDetectionEngine:
                     current_state = "DEMAND_COLLAPSE"
                     active_streak = 1
                     is_anomaly = True
-                    winsorized_history[t] = mu_t
+                    winsorized_history[t] = x_t
                 else:
                     current_state = "NORMAL"
                     active_streak = 0
