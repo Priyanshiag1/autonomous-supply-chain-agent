@@ -151,7 +151,12 @@ print(f"  * Stockout Occurred:        {res_next['stockout_occurred']}")
 # -------------------------------------------------------------------------
 # Audit 6: Scenario 4 - Multi-Day Structural Plateau (HOUSEHOLD_2_440_TX_1)
 # -------------------------------------------------------------------------
-print(f"\n[Audit 6: Multi-Day Depletion under Confirmed Structural Plateau (Day 340-343)]")
+print(f"\n[Audit 6: Day-by-Day Accounting Table under Structural Plateau (Day 340-343)]")
+print(f"Product: HOUSEHOLD_2_440_TX_1_validation (Category: HOUSEHOLD | State: TX)")
+print("-" * 105)
+print(f"{'Day':<6} | {'Opening':<7} | {'Inbound':<7} | {'Demand':<7} | {'Fulfilled':<9} | {'Unmet':<6} | {'Closing':<7} | {'Stockout':<8} | {'Sustained Runway':<16}")
+print("-" * 105)
+
 sku_4 = "HOUSEHOLD_2_440_TX_1_validation"
 state_4 = "TX"
 plateau_days = [
@@ -171,7 +176,10 @@ for day_idx, sales_val, status_val, base_val, z_val in plateau_days:
         baseline_mean=base_val,
         z_score=z_val
     )
-    print(f"  * Day {day_idx}: Demand = {sales_val:2d} | Open = {p_res['opening_stock']:3d} | Close = {p_res['closing_stock']:3d} | Sustained Runway = {p_res['runway_sustained_days']:4.1f}d | Action: {p_res['action_taken']}")
+    so_str = "TRUE" if p_res['stockout_occurred'] else "False"
+    print(f"d_{day_idx:<4} | {p_res['opening_stock']:<7} | {p_res['inbound_received']:<7} | {sales_val:<7} | {p_res['fulfilled_demand']:<9} | {p_res['unmet_demand']:<6} | {p_res['closing_stock']:<7} | {so_str:<8} | {p_res['runway_sustained_days']:<5.2f} days")
+    print(f"       -> Action: {p_res['action_taken']}")
+print("-" * 105)
 
 conn.close()
 

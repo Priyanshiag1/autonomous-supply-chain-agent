@@ -224,10 +224,11 @@ class WarehouseInventoryEngine:
                 if transfer_qty > 0:
                     actions.append(f"Dispatched expedited inter-warehouse transfer of {transfer_qty} units (Arrival: Day {day_index+1}).")
                 
-                # Emergency Factory Reorder for remaining deficit
-                factory_order_qty = max(reorder_batch, unmet_demand + safety_stock)
+                # Emergency Factory Reorder for remaining net deficit (MRP Netting)
+                net_factory_deficit = max(0, (unmet_demand + safety_stock) - transfer_qty)
+                factory_order_qty = max(reorder_batch, net_factory_deficit)
                 self._place_factory_po(conn, sku_id, state_id, day_index, factory_order_qty, lead_time, is_emergency=True)
-                actions.append(f"Placed Emergency Factory PO for {factory_order_qty} units (Expedited Lead Time: {lead_time} days).")
+                actions.append(f"Placed Emergency Factory PO for {factory_order_qty} units (Expedited Lead Time: {lead_time} days; Netted CA transfer of {transfer_qty}).")
                 
             elif anomaly_status == "PROVISIONAL_ALERT":
                 alert_tier = "PROVISIONAL_SURGE_RISK"
