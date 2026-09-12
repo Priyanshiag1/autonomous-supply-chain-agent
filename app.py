@@ -172,6 +172,51 @@ def get_inventory_engine():
 inv_engine = get_inventory_engine()
 orchestrator = MultiAgentSystemOrchestrator(inventory_engine=inv_engine, warmup_days=7)
 
+@st.cache_data(show_spinner="Simulating 365-Day Continuous Digital Twin...")
+def run_continuous_simulation(sku_id: str, state_id: str, cat_id: str):
+    db_file = f"sim_{sku_id[:12]}_{state_id}.db"
+    with sqlite3.connect(db_file) as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        
+    inv = WarehouseInventoryEngine(db_file)
+    inv.init_db(reset=True)
+    inv.seed_initial_inventory(m5_df, [sku_id])
+    
+    sku_row = m5_df[m5_df['id'] == sku_id].iloc[0]
+    sales = [float(sku_row[f"d_{d}"]) for d in range(1, 366)]
+    
+    anom_engine = AnomalyDetectionEngine(warmup_days=7)
+    anom_df = anom_engine.analyze_series(sales, cal_df, sku_id, state_id, cat_id)
+    
+    days_data = {}
+    for d in range(1, 366):
+        a_row = anom_df.iloc[d - 1]
+        dem = int(a_row['actual_sales'])
+        stat = a_row['status']
+        base = float(a_row['baseline_mean']) if pd.notnull(a_row['baseline_mean']) else 0.0
+        z = float(a_row['z_score']) if pd.notnull(a_row['z_score']) else 0.0
+        
+        inv_res = inv.process_daily_demand(d, sku_id, state_id, dem, stat, base, z)
+        
+        with inv.get_connection() as conn:
+            c = conn.cursor()
+            item_prefix = "_".join(sku_id.replace("_validation", "").split("_")[:3])
+            c.execute("SELECT state_id, current_stock, safety_stock FROM warehouse_inventory WHERE sku_id LIKE ?", (f"{item_prefix}%",))
+            comp_stocks = {r['state_id']: dict(r) for r in c.fetchall()}
+            
+            c.execute("SELECT shipment_id, quantity, shipment_type, order_day, arrival_day, source_location, status FROM inbound_shipments WHERE sku_id = ? AND arrival_day >= ? AND order_day <= ?", (sku_id, d, d))
+            shipments = [dict(r) for r in c.fetchall()]
+            
+        days_data[d] = {
+            'anom': a_row.to_dict(),
+            'inv': inv_res,
+            'comp': comp_stocks,
+            'shipments': shipments
+        }
+        
+    return days_data, anom_df
+
 # -----------------------------------------------------------------------------
 # 3. Sidebar Navigation: Strategic Archetypes vs Enterprise Catalog Explorer
 # -----------------------------------------------------------------------------
@@ -335,45 +380,85 @@ full_sales = [float(sku_row[c]) for c in day_cols]
 cal_row = cal_df[cal_df['d'] == day_col_tag].iloc[0]
 date_str = str(cal_row.get('date', 'Unknown Date'))
 
-# Run Anomaly Engine over the historical sequence up to current_day
-anomaly_engine = AnomalyDetectionEngine(warmup_days=7)
-anomaly_df = anomaly_engine.analyze_series(
-    full_sales[:current_day],
-    cal_df,
-    current_sku,
-    current_state,
-    current_cat
-)
+# Execute 365-Day Continuous Digital Twin Simulation
+sim_days, anom_df = run_continuous_simulation(current_sku, current_state, current_cat)
+day_data = sim_days[current_day]
+anom_info = day_data['anom']
+inv_info = day_data['inv']
+comp_stocks = day_data['comp']
+shipments = day_data['shipments']
 
-current_anom_row = anomaly_df[anomaly_df['day'] == day_col_tag].iloc[0]
-today_sales = int(current_anom_row['actual_sales'])
-today_baseline = round(float(current_anom_row['baseline_mean']), 2)
-today_z = round(float(current_anom_row['z_score']), 2)
-today_status = current_anom_row['status']
+today_sales = int(anom_info['actual_sales'])
+today_baseline = round(float(anom_info['baseline_mean']), 2) if pd.notnull(anom_info['baseline_mean']) else 0.0
+today_z = round(float(anom_info['z_score']), 2) if pd.notnull(anom_info['z_score']) else 0.0
+today_status = anom_info['status']
 
-# CRITICAL IDEMPOTENCY: Reset scenario baseline before processing day
-# Guarantees zero cumulative drift across repeated evaluations and refreshes
-inv_engine.reset_scenario_baseline(
-    sku_id=current_sku,
-    state_id=current_state,
-    day_index=current_day,
-    m5_df=m5_df
-)
+current_wh_stock = inv_info['closing_stock']
+current_wh_safety = comp_stocks.get(current_state, {}).get('safety_stock', 10)
 
-# Execute Multi-Agent Handshake
-handshake = orchestrator.process_day(
-    day_index=current_day,
-    sku_id=current_sku,
-    state_id=current_state,
-    cat_id=current_cat,
-    historical_sales=full_sales,
-    calendar_df=cal_df
-)
+# Evaluate live multi-agent dialogue for current_day
+is_surge = (today_z >= 2.0 and today_sales > 0)
+is_plateau = ("PLATEAU" in today_status and today_sales > 0)
+is_severe_drop = (today_z <= -2.5 and today_baseline >= 5.0 and today_sales == 0)
+is_event = (is_surge or is_plateau or is_severe_drop or inv_info['stockout_occurred'] or "WARNING" in inv_info['action_taken'] or "CRITICAL" in inv_info['action_taken'] or "FRAGILE" in inv_info['action_taken'] or "PLATEAU" in inv_info['action_taken'])
 
-# Fetch Current Warehouse State from SQLite
-stock_record = inv_engine.get_stock_record(current_sku, current_state)
-current_wh_stock = stock_record['current_stock'] if stock_record else 0
-current_wh_safety = stock_record['safety_stock'] if stock_record else 0
+if is_event:
+    cal_r = cal_df[cal_df['d'] == day_col_tag].iloc[0]
+    anom_dict = dict(anom_info)
+    anom_dict['sku_id'] = current_sku
+    anom_dict['cat_id'] = current_cat
+    anom_dict['state_id'] = current_state
+    
+    diag = orchestrator.agent1.reason_engine.evaluate_root_cause(anom_dict, cal_r, cross_state_spiked=False)
+    a1_payload = {
+        "sender": "Agent 1 (Demand Detective)",
+        "recipient": "Agent 2 (Inventory Operator)",
+        "timestamp_day": day_col_tag,
+        "date": str(cal_r.get('date', '')),
+        "sku_id": current_sku,
+        "category": current_cat,
+        "state_id": current_state,
+        "metrics": {
+            "actual_demand": today_sales,
+            "baseline_mean": today_baseline,
+            "z_score": today_z,
+            "status": today_status,
+            "streak_day": int(anom_info.get('streak_day', 1))
+        },
+        "root_cause_diagnosis": diag,
+        "executive_summary": diag.get('executive_summary', '')
+    }
+    
+    actions = [act.strip() for act in inv_info['action_taken'].split(" | ")]
+    a2_payload = {
+        "sender": "Agent 2 (Inventory Operator)",
+        "recipient": "Agent 1 (Demand Detective)",
+        "timestamp_day": day_col_tag,
+        "sku_id": current_sku,
+        "state_id": current_state,
+        "warehouse_accounting": {
+            "opening_stock": inv_info['opening_stock'],
+            "inbound_received": inv_info['inbound_received'],
+            "actual_demand": today_sales,
+            "fulfilled_demand": inv_info['fulfilled_demand'],
+            "unmet_demand_backlog": inv_info['unmet_demand'],
+            "closing_stock": inv_info['closing_stock'],
+            "stockout_incident": inv_info['stockout_occurred']
+        },
+        "risk_and_runway": {
+            "runway_impulse_days": inv_info['runway_impulse_days'],
+            "runway_sustained_days": inv_info['runway_sustained_days'],
+            "lead_time_days": 3
+        },
+        "decisions_and_actions": actions,
+        "conversational_dialogue": f"Physical inventory state updated. Warehouse balance is {inv_info['closing_stock']} units with 0 backorders." if inv_info['unmet_demand'] == 0 else f"CRITICAL: Stockout incident active. Clamped to 0. Dispatched emergency transfers and expedited orders."
+    }
+    handshake = {
+        "agent_1_outbound": a1_payload,
+        "agent_2_inbound_response": a2_payload
+    }
+else:
+    handshake = None
 
 # -----------------------------------------------------------------------------
 # 5. Top Header & 5 Compact KPI Status Cards
@@ -423,7 +508,7 @@ with kpi4:
     """, unsafe_allow_html=True)
 
 with kpi5:
-    unmet_count = handshake['agent_2_inbound_response']['warehouse_accounting']['unmet_demand_backlog'] if handshake else 0
+    unmet_count = inv_info['unmet_demand']
     unmet_color = "#EF4444" if unmet_count > 0 else "#10B981"
     st.markdown(f"""
     <div class='metric-card'>
@@ -439,7 +524,7 @@ with kpi5:
 col_chart, col_dialogue = st.columns([1.35, 1.0])
 
 with col_chart:
-    st.markdown("<div style='font-size:0.88rem; font-weight:700; color:#F1F5F9; margin-bottom:4px;'>📈 POS Demand vs Rolling Confidence Tunnel (365 Days)</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.88rem; font-weight:700; color:#F1F5F9; margin-bottom:4px;'>📈 POS Demand & Physical Inventory Trajectory (365 Days)</div>", unsafe_allow_html=True)
     
     # Compute display slice (show from max(1, current_day - 50) to current_day)
     start_view = max(0, current_day - 50)
@@ -451,7 +536,7 @@ with col_chart:
     view_baselines = []
     view_sigmas = []
     for d in view_days:
-        sub_row = anomaly_df[anomaly_df['day'] == f"d_{d}"]
+        sub_row = anom_df[anom_df['day'] == f"d_{d}"]
         if not sub_row.empty:
             b_val = sub_row['baseline_mean'].iloc[0]
             s_val = sub_row['baseline_std'].iloc[0]
@@ -493,6 +578,15 @@ with col_chart:
         line=dict(color='#38BDF8', width=2.5),
         marker=dict(size=5, color='#38BDF8'),
         name='Actual Sales (POS)'
+    ))
+
+    # 3b. Physical Warehouse Stock Level (Sawtooth curve)
+    view_stocks = [sim_days[d]['inv']['closing_stock'] for d in view_days]
+    fig.add_trace(go.Scatter(
+        x=view_dates, y=view_stocks,
+        mode='lines',
+        line=dict(color='#10B981', width=2),
+        name='Warehouse Stock'
     ))
 
     # 4. Highlight Active Day with Target Marker
@@ -598,32 +692,21 @@ with col_dialogue:
 with st.expander("🌐 Multi-Warehouse Network Topology & Highway In-Transit Pipeline (Click to Expand)", expanded=False):
     col_tx, col_ca, col_wi, col_ship = st.columns([1, 1, 1, 1.5])
 
-    # Fetch all 3 state balances for current product
-    with inv_engine.get_connection() as conn:
-        item_prefix = "_".join(current_sku.replace("_validation", "").split("_")[:3])
-        df_net = pd.read_sql_query(
-            "SELECT state_id, current_stock, safety_stock, lead_time_days FROM warehouse_inventory WHERE sku_id LIKE ?",
-            conn, params=(f"{item_prefix}%",)
-        )
-        
-        # Active shipments
-        df_ship = pd.read_sql_query(
-            "SELECT shipment_id, quantity, shipment_type, order_day, arrival_day, source_location, status FROM inbound_shipments WHERE sku_id LIKE ? ORDER BY arrival_day ASC",
-            conn, params=(f"{item_prefix}%",)
-        )
+    tx_m = comp_stocks.get("TX", {})
+    ca_m = comp_stocks.get("CA", {})
+    wi_m = comp_stocks.get("WI", {})
 
-    def get_state_metrics(st_code: str):
-        m = df_net[df_net['state_id'] == st_code]
-        if not m.empty:
-            stock = m['current_stock'].iloc[0]
-            ss = m['safety_stock'].iloc[0]
-            surplus = max(0, stock - (2 * ss))
-            return stock, ss, surplus
-        return 0, 0, 0
+    tx_stock = tx_m.get('current_stock', inv_info['closing_stock'])
+    tx_ss = tx_m.get('safety_stock', 10)
+    tx_surplus = max(0, tx_stock - (2 * tx_ss))
 
-    tx_stock, tx_ss, tx_surplus = get_state_metrics("TX")
-    ca_stock, ca_ss, ca_surplus = get_state_metrics("CA")
-    wi_stock, wi_ss, wi_surplus = get_state_metrics("WI")
+    ca_stock = ca_m.get('current_stock', 0)
+    ca_ss = ca_m.get('safety_stock', 10)
+    ca_surplus = max(0, ca_stock - (2 * ca_ss))
+
+    wi_stock = wi_m.get('current_stock', 0)
+    wi_ss = wi_m.get('safety_stock', 10)
+    wi_surplus = max(0, wi_stock - (2 * wi_ss))
 
     with col_tx:
         st.markdown(f"""
@@ -653,13 +736,9 @@ with st.expander("🌐 Multi-Warehouse Network Topology & Highway In-Transit Pip
         """, unsafe_allow_html=True)
 
     with col_ship:
-        if not df_ship.empty:
-            active_p = df_ship[df_ship['arrival_day'] >= current_day]
-            if not active_p.empty:
-                display_tbl = active_p[['shipment_type', 'quantity', 'arrival_day', 'source_location', 'status']].copy()
-                display_tbl.columns = ['Type', 'Units', 'Arrives Day', 'Source', 'Status']
-                st.dataframe(display_tbl, hide_index=True, use_container_width=True)
-            else:
-                st.markdown("<div style='color:#64748B; font-size:0.8rem; padding:8px;'>No active shipments currently on the highway. All historical orders delivered.</div>", unsafe_allow_html=True)
+        if shipments:
+            display_tbl = pd.DataFrame(shipments)[['shipment_type', 'quantity', 'arrival_day', 'source_location', 'status']].copy()
+            display_tbl.columns = ['Type', 'Units', 'Arrives Day', 'Source', 'Status']
+            st.dataframe(display_tbl, hide_index=True, use_container_width=True)
         else:
-            st.markdown("<div style='color:#64748B; font-size:0.8rem; padding:8px;'>No active shipments recorded in database for this product.</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#64748B; font-size:0.8rem; padding:8px;'>No active shipments currently on the highway. All historical orders delivered.</div>", unsafe_allow_html=True)
