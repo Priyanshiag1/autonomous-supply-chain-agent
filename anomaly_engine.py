@@ -107,7 +107,7 @@ class AnomalyDetectionEngine:
             # --- 4. State Transition Logic (Hysteresis & Rolling Markov Transitions) ---
             is_anomaly = False
             
-            if current_state in ["NORMAL", "RESOLVED_ONE_OFF", "CALIBRATION_PERIOD"]:
+            if current_state in ["NORMAL", "RESOLVED_ONE_OFF", "RESOLVED_MULTI_DAY_SURGE", "CALIBRATION_PERIOD"]:
                 # Check for new spike onset
                 if z_score >= self.entry_z and x_t >= self.volume_gate:
                     current_state = "PROVISIONAL_ALERT"
