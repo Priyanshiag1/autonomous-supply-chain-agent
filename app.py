@@ -162,31 +162,29 @@ def load_datasets():
 
 m5_df, cal_df, hero_df = load_datasets()
 
-# Initialize Persistent Warehouse Engine
-@st.cache_resource
+# Initialize Warehouse Engine
 def get_inventory_engine():
     db_path = "inventory.db"
     engine = WarehouseInventoryEngine(db_path=db_path)
     engine.init_db()
-    engine.seed_initial_inventory(m5_df, hero_df['id'].tolist())
     return engine
 
 inv_engine = get_inventory_engine()
 orchestrator = MultiAgentSystemOrchestrator(inventory_engine=inv_engine, warmup_days=7)
 
 # -----------------------------------------------------------------------------
-# 3. Sidebar Navigation: Curated Hero Archetypes vs Full Catalog Explorer
+# 3. Sidebar Navigation: Strategic Archetypes vs Enterprise Catalog Explorer
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("<div style='font-size:1.1rem; font-weight:800; color:#38BDF8;'>INTELLIMARK AI</div>", unsafe_allow_html=True)
 st.sidebar.markdown("<div style='font-size:0.75rem; color:#94A3B8; margin-bottom:12px;'>Autonomous Supply Chain Digital Twin</div>", unsafe_allow_html=True)
 
 nav_mode = st.sidebar.radio(
-    "Navigation Mode:",
-    options=["🎯 Curated Hero Benchmarks (CEO Demo)", "🔍 Full Catalog Explorer (9,147 SKUs)"],
+    "Operational Mode:",
+    options=["🎯 Strategic Supply Chain Archetypes", "🔍 Enterprise Catalog Explorer (9,147 Series)"],
     index=0
 )
 
-# Curated Hero Archetypes
+# Strategic Scenario Archetypes
 hero_scenarios = {
     "🏈 SuperBowl Party Snacks (FOODS_3_090_TX)": {
         "sku_id": "FOODS_3_090_TX_1_validation",
@@ -232,9 +230,9 @@ if "active_scenario_name" not in st.session_state:
 if "current_day_num" not in st.session_state:
     st.session_state.current_day_num = hero_scenarios[st.session_state.active_scenario_name]['default_day']
 
-if nav_mode == "🎯 Curated Hero Benchmarks (CEO Demo)":
+if nav_mode == "🎯 Strategic Supply Chain Archetypes":
     st.sidebar.markdown("---")
-    st.sidebar.markdown("<div style='font-size:0.8rem; font-weight:700; color:#CBD5E1;'>Quick-Jump to Milestone Days:</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<div style='font-size:0.8rem; font-weight:700; color:#CBD5E1;'>Critical Operating Windows:</div>", unsafe_allow_html=True)
 
     col_b1, col_b2 = st.sidebar.columns(2)
     with col_b1:
@@ -263,7 +261,7 @@ if nav_mode == "🎯 Curated Hero Benchmarks (CEO Demo)":
     current_idx = scenario_keys.index(st.session_state.active_scenario_name) if st.session_state.active_scenario_name in scenario_keys else 0
 
     selected_scenario_name = st.sidebar.selectbox(
-        "Curated Product & Scenario Archetype:",
+        "Select Strategic Scenario:",
         options=scenario_keys,
         index=current_idx
     )
