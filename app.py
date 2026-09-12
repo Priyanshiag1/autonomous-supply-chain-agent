@@ -560,6 +560,9 @@ with col_dialogue:
         else:
             fulfillment_markup = f"<span style='color:#34D399; font-weight:700;'>{wh_acc['fulfilled_demand']} / {wh_acc['actual_demand']} units fulfilled (100% complete)</span> — <span style='color:#E2E8F0;'><b>{wh_acc['closing_stock']} units remaining</b> in warehouse stock</span> <span style='color:#64748B;'>(0 unmet)</span>"
             
+        imp_txt = f"{rw_acc['runway_impulse_days']:.1f}d" if rw_acc['runway_impulse_days'] is not None else "N/A"
+        sus_txt = f"{rw_acc['runway_sustained_days']:.1f}d" if rw_acc['runway_sustained_days'] is not None else "N/A"
+
         st.markdown(f"""
         <div class='agent-card' style='border-left-color: #34D399;'>
             <div class='agent-2-header'>
@@ -567,7 +570,7 @@ with col_dialogue:
             </div>
             <div class='agent-body'>
                 <b>Fulfillment Status:</b> {fulfillment_markup}<br/>
-                <b>Dual Runway:</b> Impulse: {rw_acc['runway_impulse_days']:.1f}d | Sustained: <b>{rw_acc['runway_sustained_days']:.1f}d</b> (Lead time: 3d)<br/>
+                <b>Dual Runway:</b> Impulse: {imp_txt} | Sustained: <b>{sus_txt}</b> (Lead time: 3d)<br/>
                 <b>Operational Actions:</b><br/>
         """, unsafe_allow_html=True)
         

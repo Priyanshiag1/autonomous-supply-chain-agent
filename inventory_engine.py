@@ -338,15 +338,15 @@ class WarehouseInventoryEngine:
             stockout_occurred = (unmet_demand > 0)
             
             # 4. Dual-Runway Safe-Side Calculation
-            effective_base = max(baseline_mean, 0.5)
-            effective_spike = max(float(actual_demand), 0.5)
-            
-            # 4. Dual-Runway Safe-Side Calculation
-            effective_base = max(baseline_mean, 0.5)
-            effective_spike = max(float(actual_demand), 0.5)
-            
-            runway_impulse = closing_stock / effective_base
-            runway_sustained = closing_stock / effective_spike
+            if baseline_mean > 0:
+                runway_impulse = round(closing_stock / float(baseline_mean), 1)
+            else:
+                runway_impulse = None
+                
+            if actual_demand > 0:
+                runway_sustained = round(closing_stock / float(actual_demand), 1)
+            else:
+                runway_sustained = None
             
             # 5. Pipeline Stock Tracking (Orders currently in-transit arriving in future)
             cursor.execute("""

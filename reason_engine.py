@@ -114,8 +114,16 @@ class RootCauseIntelligenceEngine:
         guardrail_audit = "None"
         guardrail_passed = True
         
+        # --- ZERO DEMAND GUARD ---
+        if actual_sales == 0:
+            tier_level = "TIER_2_STATISTICAL"
+            classification = "ZERO_DEMAND_INACTIVE"
+            primary_reason = f"Zero POS sales recorded today against baseline of {baseline_mean:.1f} units."
+            guardrail_passed = True
+            guardrail_audit = "None"
+
         # --- TIER 1 & STEP 4B: CALENDAR LOOKUP + SEMANTIC GUARDRAIL ---
-        if has_calendar_event:
+        elif has_calendar_event:
             # Check affinity of this calendar event with product category
             event_affinities = self.affinity_matrix.get(evt_name, {"FOODS": 0.5, "HOUSEHOLD": 0.5, "HOBBIES": 0.5})
             affinity = event_affinities.get(cat_id, 0.3)
@@ -130,13 +138,12 @@ class RootCauseIntelligenceEngine:
                 guardrail_audit = f"Calendar Event '{evt_name}' rejected: Coincidental holiday incompatible with category '{cat_id}' (Affinity: {affinity:.2f} < {self.affinity_threshold})."
                 
         # If calendar event was missing or rejected, check SNAP welfare (if FOODS)
-        if not guardrail_passed or (not has_calendar_event and has_snap):
+        if actual_sales > 0 and (not guardrail_passed or (not has_calendar_event and has_snap)):
             snap_affinity = self.affinity_matrix["SNAP"].get(cat_id, 0.0)
             if has_snap and snap_affinity >= self.affinity_threshold:
-                tier_level = "TIER_1_POLICY"
+                tier_level = "TIER_1_CALENDAR"
                 classification = "SNAP_WELFARE_DISBURSEMENT"
-                # Nuanced framing: SNAP primary driver, possibly compounded if spike is extreme
-                if z_score > 10.0:
+                if actual_sales >= 300: # Mega-spike indicator
                     primary_reason = f"{state_id} monthly SNAP welfare disbursement cycle; likely compounded by institutional wholesale reorder on the same date."
                 else:
                     primary_reason = f"{state_id} state SNAP welfare food-stamp disbursement cycle driving high category footfall."
@@ -146,7 +153,7 @@ class RootCauseIntelligenceEngine:
                 guardrail_passed = False
 
         # --- TIER 2: STATISTICAL HEURISTIC INFERENCE (WHEN CALENDAR EMPTY OR REJECTED) ---
-        if tier_level == "TIER_2_STATISTICAL" or not guardrail_passed:
+        if actual_sales > 0 and (tier_level == "TIER_2_STATISTICAL" or not guardrail_passed):
             tier_level = "TIER_2_STATISTICAL"
             
             # Duration & Velocity Fingerprint
@@ -235,6 +242,9 @@ class RootCauseIntelligenceEngine:
                 pass
 
         # Deterministic Executive Synthesis (Instant, 100% Reliable Fallback)
+        if actual_sales == 0:
+            return f"Passive surveillance active for {sku_id} in {state_id} ({date_str}): Zero POS demand recorded today against baseline of {baseline_mean:.1f} units. No demand anomaly detected."
+            
         pct_change = ((actual_sales - baseline_mean) / max(baseline_mean, 1.0)) * 100
         sign = "+" if pct_change >= 0 else ""
         

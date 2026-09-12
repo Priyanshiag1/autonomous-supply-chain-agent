@@ -180,6 +180,12 @@ class AnomalyDetectionEngine:
                     is_anomaly = True
                     winsorized_history[t] = mu_t
             
+            elif current_state == "DEMAND_COLLAPSE":
+                # Single-event drop recorded: return to normal surveillance
+                current_state = "NORMAL"
+                active_streak = 0
+                is_anomaly = False
+            
             elif current_state == "CONFIRMED_STRUCTURAL_PLATEAU":
                 if z_score <= self.exit_z:
                     # Plateau/Season has ended: revert baseline to historical normal

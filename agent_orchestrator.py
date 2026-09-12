@@ -57,8 +57,19 @@ class DemandDetectiveAgent:
         anom_row = day_rows.iloc[0]
         status = anom_row['status']
         
-        # If normal steady state, no alert payload dispatched
-        if status == "NORMAL" and anom_row['z_score'] < 2.0:
+        actual_sales = float(anom_row['actual_sales'])
+        z_score = float(anom_row['z_score'])
+        baseline = float(anom_row['baseline_mean'])
+        
+        # Only dispatch active inter-agent alert payload if there is a real demand event:
+        # 1. Significant positive surge: z_score >= 2.0 and actual_sales > 0
+        # 2. Confirmed structural plateau: "PLATEAU" in status and actual_sales > 0
+        # 3. Severe sudden drop from active baseline: z_score <= -2.5 and baseline >= 5.0 and actual_sales == 0
+        is_surge = (z_score >= 2.0 and actual_sales > 0)
+        is_plateau = ("PLATEAU" in status and actual_sales > 0)
+        is_severe_drop = (z_score <= -2.5 and baseline >= 5.0 and actual_sales == 0)
+        
+        if not (is_surge or is_plateau or is_severe_drop):
             return None
             
         cal_rows = calendar_df[calendar_df['d'] == day_tag]
