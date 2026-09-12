@@ -160,13 +160,17 @@ print("-" * 105)
 sku_4 = "HOUSEHOLD_2_440_TX_1_validation"
 state_4 = "TX"
 
-# Ensure companion warehouses CA and WI have stock for transfer testing
+# Inspect natural seeded balances of donor warehouses CA and WI
 cursor.execute("""
-    UPDATE warehouse_inventory 
-    SET current_stock = 40, safety_stock = 10
+    SELECT state_id, current_stock, safety_stock 
+    FROM warehouse_inventory 
     WHERE sku_id LIKE 'HOUSEHOLD_2_440%' AND state_id != 'TX'
 """)
-conn.commit()
+donor_seeds = cursor.fetchall()
+print("  * Donor Warehouse Natural Balances (Before Transfers):")
+for d in donor_seeds:
+    surplus_calc = d[1] - (2 * d[2])
+    print(f"    - {d[0]} Warehouse: Stock = {d[1]} | Safety Stock = {d[2]} | Donor Protection Floor (2xSS) = {2*d[2]} | Surplus Available = {surplus_calc} units")
 
 plateau_days = [
     (340, 24, "PROVISIONAL_ALERT", 2.8, 4.2),
