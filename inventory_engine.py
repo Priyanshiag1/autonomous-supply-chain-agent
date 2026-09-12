@@ -233,8 +233,12 @@ class WarehouseInventoryEngine:
                 ss = int(round(base_demand * 3.5))
                 batch = int(round(base_demand * 14))
                 
+                parts = sku_id.replace("_validation", "").split("_")
+                prefix = "_".join(parts[:3])
+                store_num = parts[4] if len(parts) > 4 else "1"
+                
                 for st in ['TX', 'CA', 'WI']:
-                    target_sku = sku_id.replace(f"_{state_id}_", f"_{st}_")
+                    target_sku = f"{prefix}_{st}_{store_num}_validation"
                     cursor.execute("""
                         INSERT OR REPLACE INTO warehouse_inventory
                         (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
