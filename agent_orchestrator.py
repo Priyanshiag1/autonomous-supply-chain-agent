@@ -202,9 +202,11 @@ class InventoryOperatorAgent:
                 f"{inv_res['action_taken']}"
             )
         elif status == "PROVISIONAL_ALERT":
+            sus_str = f"{inv_res['runway_sustained_days']:.1f} days" if inv_res['runway_sustained_days'] is not None else "N/A"
+            imp_str = f"{inv_res['runway_impulse_days']:.1f} days" if inv_res['runway_impulse_days'] is not None else "N/A"
             return (
-                f"PROVISIONAL ALERT ACKNOWLEDGED: Sustained runway is {inv_res['runway_sustained_days']:.1f} days "
-                f"(Impulse: {inv_res['runway_impulse_days']:.1f} days). "
+                f"PROVISIONAL ALERT ACKNOWLEDGED: Sustained runway is {sus_str} "
+                f"(Impulse: {imp_str}). "
                 f"Closing stock at {inv_res['closing_stock']} units. {inv_res['action_taken']}"
             )
         elif inv_res['alert_tier'] == "RECOVERED_BELOW_SAFETY_BUFFER":
