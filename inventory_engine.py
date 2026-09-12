@@ -131,6 +131,137 @@ class WarehouseInventoryEngine:
             
             conn.commit()
 
+    def reset_scenario_baseline(self, sku_id: str, state_id: str, day_index: int, m5_df: Optional[pd.DataFrame] = None):
+        """
+        Idempotent simulation baseline reset for Digital Twin historical replay.
+        Ensures scrubbing or reloading a day always begins from canonical pre-event state,
+        preventing state drift or cumulative mutation across browser refreshes.
+        """
+        parts = sku_id.replace("_validation", "").split("_")
+        prefix = "_".join(parts[:3])
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Clear existing active shipments and daily ledger records for this item prefix
+            cursor.execute("DELETE FROM inbound_shipments WHERE sku_id LIKE ?", (f"{prefix}%",))
+            cursor.execute("DELETE FROM inventory_daily_ledger WHERE sku_id LIKE ?", (f"{prefix}%",))
+            
+            # Scenario 1: SuperBowl Day 9 (FOODS_3_090_TX)
+            if "FOODS_3_090" in sku_id:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'TX', 349, 102, 3, 407, ?)
+                """, (sku_id, day_index - 1))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'CA', 350, 100, 1, 407, ?)
+                """, (sku_id.replace("_TX_", "_CA_"), day_index - 1))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'WI', 200, 80, 1, 407, ?)
+                """, (sku_id.replace("_TX_", "_WI_"), day_index - 1))
+
+            # Scenario 2: 86x Mega SNAP Outlier (FOODS_2_285_TX, Day 98)
+            elif "FOODS_2_285" in sku_id:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'TX', 93, 27, 3, 108, ?)
+                """, (sku_id, day_index - 1))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'CA', 300, 40, 1, 108, ?)
+                """, (sku_id.replace("_TX_", "_CA_"), day_index - 1))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'WI', 200, 40, 1, 108, ?)
+                """, (sku_id.replace("_TX_", "_WI_"), day_index - 1))
+
+            # Scenario 3: Toys & Crafts SNAP Defense (HOBBIES_1_209_TX, Day 126)
+            elif "HOBBIES_1_209" in sku_id:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'TX', 36, 10, 3, 42, ?)
+                """, (sku_id, day_index - 1))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'CA', 69, 20, 1, 42, ?)
+                """, (sku_id.replace("_TX_", "_CA_"), day_index - 1))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'WI', 50, 20, 1, 42, ?)
+                """, (sku_id.replace("_TX_", "_WI_"), day_index - 1))
+
+            # Scenario 4 & 5: Cleaners Single-Day Impulse & Multi-Day Plateau (HOUSEHOLD_2_440_TX)
+            elif "HOUSEHOLD_2_440" in sku_id:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'TX', 36, 10, 3, 42, 339)
+                """, (sku_id,))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'CA', 36, 10, 1, 42, 339)
+                """, (sku_id.replace("_TX_", "_CA_"),))
+                cursor.execute("""
+                    INSERT OR REPLACE INTO warehouse_inventory
+                    (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                    VALUES (?, 'WI', 36, 10, 1, 42, 339)
+                """, (sku_id.replace("_TX_", "_WI_"),))
+
+            # Generic Custom SKU Explorer (Any of the 9,147 SKUs in Walmart M5)
+            else:
+                base_demand = 10.0
+                if m5_df is not None and not m5_df.empty:
+                    m_row = m5_df[m5_df['id'] == sku_id]
+                    if not m_row.empty:
+                        d_cols = [f"d_{i}" for i in range(1, min(31, max(2, day_index)))]
+                        if d_cols:
+                            base_demand = max(3.0, float(pd.Series([float(m_row.iloc[0][c]) for c in d_cols]).mean()))
+                
+                stock = int(round(base_demand * 12))
+                ss = int(round(base_demand * 3.5))
+                batch = int(round(base_demand * 14))
+                
+                for st in ['TX', 'CA', 'WI']:
+                    target_sku = sku_id.replace(f"_{state_id}_", f"_{st}_")
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO warehouse_inventory
+                        (sku_id, state_id, current_stock, safety_stock, lead_time_days, reorder_batch_size, last_updated_day)
+                        VALUES (?, ?, ?, ?, 3, ?, ?)
+                    """, (target_sku, st, stock, ss, batch, day_index - 1))
+            
+            conn.commit()
+
+        # If evaluating a day during the plateau progression (340 to 343), replay prior days
+        if 340 <= day_index <= 343 and "HOUSEHOLD_2_440" in sku_id:
+            plateau_sequence = [
+                (340, 24, "PROVISIONAL_ALERT", 2.8, 4.2),
+                (341, 42, "ELEVATED_SURGE_DAY_2", 2.8, 7.8),
+                (342, 31, "CONFIRMED_STRUCTURAL_PLATEAU", 2.8, 5.6)
+            ]
+            for d_i, dem_i, st_i, b_i, z_i in plateau_sequence:
+                if d_i < day_index:
+                    self.process_daily_demand(
+                        day_index=d_i,
+                        sku_id=sku_id,
+                        state_id=state_id,
+                        actual_demand=dem_i,
+                        anomaly_status=st_i,
+                        baseline_mean=b_i,
+                        z_score=z_i
+                    )
+
     def get_stock_record(self, sku_id: str, state_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves active warehouse stock record."""
         with self.get_connection() as conn:
