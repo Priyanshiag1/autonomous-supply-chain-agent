@@ -218,19 +218,13 @@ hero_scenarios = {
     }
 }
 
-selected_scenario_name = st.sidebar.selectbox(
-    "Target Product & Scenario Archetype:",
-    options=list(hero_scenarios.keys()),
-    index=0
-)
-selected_scenario = hero_scenarios[selected_scenario_name]
-current_sku = selected_scenario['sku_id']
-current_state = selected_scenario['state_id']
-current_cat = selected_scenario['cat_id']
+scenario_keys = list(hero_scenarios.keys())
 
-# Session State for Timeline Scrubber
+# Initialize session state
+if "active_scenario_name" not in st.session_state:
+    st.session_state.active_scenario_name = scenario_keys[0]
 if "current_day_num" not in st.session_state:
-    st.session_state.current_day_num = selected_scenario['default_day']
+    st.session_state.current_day_num = hero_scenarios[st.session_state.active_scenario_name]['default_day']
 
 # Scenario Quick Jump Buttons
 st.sidebar.markdown("---")
@@ -239,14 +233,40 @@ st.sidebar.markdown("<div style='font-size:0.8rem; font-weight:700; color:#CBD5E
 col_b1, col_b2 = st.sidebar.columns(2)
 with col_b1:
     if st.button("🏈 Day 9 (SuperBowl)", use_container_width=True):
+        st.session_state.active_scenario_name = scenario_keys[0]
         st.session_state.current_day_num = 9
+        st.rerun()
     if st.button("🛡️ Day 126 (Guardrail)", use_container_width=True):
+        st.session_state.active_scenario_name = scenario_keys[2]
         st.session_state.current_day_num = 126
+        st.rerun()
 with col_b2:
     if st.button("💥 Day 98 (Mega SNAP)", use_container_width=True):
+        st.session_state.active_scenario_name = scenario_keys[1]
         st.session_state.current_day_num = 98
+        st.rerun()
     if st.button("📈 Day 343 (Plateau)", use_container_width=True):
+        st.session_state.active_scenario_name = scenario_keys[4]
         st.session_state.current_day_num = 343
+        st.rerun()
+
+current_idx = scenario_keys.index(st.session_state.active_scenario_name) if st.session_state.active_scenario_name in scenario_keys else 0
+
+selected_scenario_name = st.sidebar.selectbox(
+    "Target Product & Scenario Archetype:",
+    options=scenario_keys,
+    index=current_idx
+)
+
+if selected_scenario_name != st.session_state.active_scenario_name:
+    st.session_state.active_scenario_name = selected_scenario_name
+    st.session_state.current_day_num = hero_scenarios[selected_scenario_name]['default_day']
+    st.rerun()
+
+selected_scenario = hero_scenarios[st.session_state.active_scenario_name]
+current_sku = selected_scenario['sku_id']
+current_state = selected_scenario['state_id']
+current_cat = selected_scenario['cat_id']
 
 # Timeline Slider
 st.sidebar.markdown("---")
@@ -388,8 +408,10 @@ with col_chart:
     for d in view_days:
         sub_row = anomaly_df[anomaly_df['day'] == f"d_{d}"]
         if not sub_row.empty:
-            view_baselines.append(float(sub_row['baseline_mean'].iloc[0]))
-            view_sigmas.append(float(sub_row['sigma_effective'].iloc[0]))
+            b_val = sub_row['baseline_mean'].iloc[0]
+            s_val = sub_row['baseline_std'].iloc[0]
+            view_baselines.append(float(b_val) if not pd.isna(b_val) else full_sales[d-1])
+            view_sigmas.append(float(s_val) if (not pd.isna(s_val) and float(s_val) > 0) else 1.0)
         else:
             view_baselines.append(full_sales[d-1])
             view_sigmas.append(1.0)
