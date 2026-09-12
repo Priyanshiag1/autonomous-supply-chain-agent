@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+ENV/
+
+# Personal / Non-project files
+*.pptx
+*.xlsx
+.~lock.*
+Priyanshi__Resume*.pdf
+Dissertation*.pdf
+# Temporary scratch files
+m5_repo/
+m5_calendar.csv
+search_dataset.py
+Master_Reference_Guide_Autonomous_Supply_Chain.pdf
+generate_master_guide_pdf.py
+*.log
+
+
