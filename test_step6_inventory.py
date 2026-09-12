@@ -159,8 +159,17 @@ print("-" * 105)
 
 sku_4 = "HOUSEHOLD_2_440_TX_1_validation"
 state_4 = "TX"
+
+# Ensure companion warehouses CA and WI have stock for transfer testing
+cursor.execute("""
+    UPDATE warehouse_inventory 
+    SET current_stock = 40, safety_stock = 10
+    WHERE sku_id LIKE 'HOUSEHOLD_2_440%' AND state_id != 'TX'
+""")
+conn.commit()
+
 plateau_days = [
-    (340, 24, "ELEVATED_SURGE_DAY_1", 2.8, 4.2),
+    (340, 24, "PROVISIONAL_ALERT", 2.8, 4.2),
     (341, 42, "ELEVATED_SURGE_DAY_2", 2.8, 7.8),
     (342, 31, "CONFIRMED_STRUCTURAL_PLATEAU", 2.8, 5.6),
     (343, 52, "CONFIRMED_STRUCTURAL_PLATEAU", 32.33, 2.17)

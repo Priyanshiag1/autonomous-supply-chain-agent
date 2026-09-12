@@ -206,10 +206,21 @@ class WarehouseInventoryEngine:
             effective_base = max(baseline_mean, 0.5)
             effective_spike = max(float(actual_demand), 0.5)
             
+            # 4. Dual-Runway Safe-Side Calculation
+            effective_base = max(baseline_mean, 0.5)
+            effective_spike = max(float(actual_demand), 0.5)
+            
             runway_impulse = closing_stock / effective_base
             runway_sustained = closing_stock / effective_spike
             
-            # 5. Autonomous Inventory Operator Decision (Agent 2 Logic)
+            # 5. Pipeline Stock Tracking (Orders currently in-transit arriving in future)
+            cursor.execute("""
+                SELECT COALESCE(SUM(quantity), 0) FROM inbound_shipments
+                WHERE sku_id = ? AND state_id = ? AND status = 'IN_TRANSIT' AND arrival_day > ?
+            """, (sku_id, state_id, day_index))
+            pipeline_qty = cursor.fetchone()[0]
+            
+            # 6. Autonomous Inventory Operator Decision (Agent 2 Logic)
             actions = []
             alert_tier = "HEALTHY"
             
@@ -217,43 +228,60 @@ class WarehouseInventoryEngine:
                 alert_tier = "CRITICAL_STOCKOUT_INCIDENT"
                 actions.append(f"CRITICAL: Stockout of {unmet_demand} units! Warehouse inventory clamped to 0.")
                 
-                # Check for Inter-Warehouse Transfer from companion states
+                # Check for Inter-Warehouse Transfer from companion states (Fast 1-day transit)
                 transfer_qty = self._find_and_dispatch_transfer(
                     conn, sku_id, requesting_state=state_id, needed_qty=unmet_demand + safety_stock, current_day=day_index
                 )
                 if transfer_qty > 0:
                     actions.append(f"Dispatched expedited inter-warehouse transfer of {transfer_qty} units (Arrival: Day {day_index+1}).")
                 
-                # Emergency Factory Reorder for remaining net deficit (MRP Netting)
-                net_factory_deficit = max(0, (unmet_demand + safety_stock) - transfer_qty)
-                factory_order_qty = max(reorder_batch, net_factory_deficit)
-                self._place_factory_po(conn, sku_id, state_id, day_index, factory_order_qty, lead_time, is_emergency=True)
-                actions.append(f"Placed Emergency Factory PO for {factory_order_qty} units (Expedited Lead Time: {lead_time} days; Netted CA transfer of {transfer_qty}).")
+                # Net Requirements Planning (Accounting for Pipeline Stock & Inbound Transfer)
+                gross_deficit = unmet_demand + safety_stock
+                effective_incoming = pipeline_qty + transfer_qty
+                net_factory_deficit = max(0, gross_deficit - effective_incoming)
+                
+                if net_factory_deficit > 0:
+                    factory_order_qty = max(reorder_batch, net_factory_deficit)
+                    self._place_factory_po(conn, sku_id, state_id, day_index, factory_order_qty, lead_time, is_emergency=True)
+                    actions.append(f"Placed Emergency Factory PO for {factory_order_qty} units (Expedited Lead Time: {lead_time} days; Netted incoming {effective_incoming}).")
+                else:
+                    actions.append(f"Factory PO suppressed: {effective_incoming} units already in pipeline (Anti-bullwhip protection).")
                 
             elif anomaly_status == "PROVISIONAL_ALERT":
                 alert_tier = "PROVISIONAL_SURGE_RISK"
                 if runway_sustained <= lead_time:
-                    actions.append(
-                        f"WARNING: Sustained runway ({runway_sustained:.1f}d) <= lead time ({lead_time}d). "
-                        f"Placed standby factory PO of {reorder_batch} units."
-                    )
-                    self._place_factory_po(conn, sku_id, state_id, day_index, reorder_batch, lead_time, is_emergency=False)
+                    if pipeline_qty >= reorder_batch:
+                        actions.append(
+                            f"Sustained runway ({runway_sustained:.1f}d) <= lead time ({lead_time}d), but Standby PO suppressed: {pipeline_qty} units already in pipeline."
+                        )
+                    else:
+                        actions.append(
+                            f"WARNING: Sustained runway ({runway_sustained:.1f}d) <= lead time ({lead_time}d). "
+                            f"Placed standby factory PO of {reorder_batch} units."
+                        )
+                        self._place_factory_po(conn, sku_id, state_id, day_index, reorder_batch, lead_time, is_emergency=False)
                 else:
                     actions.append(
                         f"SAFE BUFFER: Sustained runway is {runway_sustained:.1f} days vs {lead_time}d lead time. Standing by."
                     )
             elif "PLATEAU" in anomaly_status or "SURGE" in anomaly_status:
                 alert_tier = "ELEVATED_DEMAND_ESCALATION"
-                if closing_stock <= safety_stock or runway_sustained <= lead_time:
-                    order_qty = max(reorder_batch, int(actual_demand * lead_time) + safety_stock)
+                target_cover = int(actual_demand * lead_time) + safety_stock
+                effective_stock_pos = closing_stock + pipeline_qty
+                net_deficit = max(0, target_cover - effective_stock_pos)
+                if net_deficit > 0:
+                    order_qty = max(reorder_batch, net_deficit)
                     self._place_factory_po(conn, sku_id, state_id, day_index, order_qty, lead_time, is_emergency=True)
                     actions.append(f"PLATEAU REPLENISHMENT: Committed factory replenishment order of {order_qty} units.")
                 else:
-                    actions.append(f"Active demand elevation monitored. Current stock {closing_stock} sufficient for {runway_sustained:.1f} days.")
+                    actions.append(f"Demand elevation monitored. Stock position ({effective_stock_pos} units on-hand/pipeline) covers {target_cover} target.")
             elif closing_stock <= safety_stock:
                 alert_tier = "ROUTINE_REORDER_TRIGGERED"
-                self._place_factory_po(conn, sku_id, state_id, day_index, reorder_batch, lead_time, is_emergency=False)
-                actions.append(f"Routine reorder triggered: Stock {closing_stock} <= Safety Stock {safety_stock}.")
+                if pipeline_qty < reorder_batch:
+                    self._place_factory_po(conn, sku_id, state_id, day_index, reorder_batch, lead_time, is_emergency=False)
+                    actions.append(f"Routine reorder triggered: Stock {closing_stock} <= Safety Stock {safety_stock}.")
+                else:
+                    actions.append(f"Stock {closing_stock} <= Safety Stock, but {pipeline_qty} units already in pipeline. Standing by.")
             else:
                 actions.append("Inventory nominal. Demand fulfilled within standard safety buffer.")
                 
