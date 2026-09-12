@@ -54,6 +54,9 @@ class AnomalyDetectionEngine:
         results = []
         active_streak = 0
         current_state = "NORMAL"
+        active_reanchor_baseline: Optional[float] = None
+        pre_shift_baseline: Optional[float] = None
+        surge_samples = []
         
         for t in range(n_days):
             day_label = day_indices[t]
@@ -78,28 +81,32 @@ class AnomalyDetectionEngine:
                     'z_score': 0.0,
                     'status': "CALIBRATION_PERIOD",
                     'streak_day': 0,
-                    'is_anomaly': False
+                    'is_anomaly': False,
+                    'is_reanchored': False,
+                    'pre_shift_baseline': None
                 })
                 continue
             
             # --- 2. 6-Week Day-of-Week Seasonality Lookback ---
-            # Gather past occurrences of the exact same weekday from the winsorized history
-            lookback_indices = [t - 7 * w for w in range(1, self.lookback_weeks + 1) if (t - 7 * w) >= 0]
-            
-            if len(lookback_indices) < 2:
-                # Fallback to simple prior 14 days if not enough weekday history yet
-                lookback_indices = [t - i for i in range(1, 15) if (t - i) >= 0]
-                
-            historical_samples = [winsorized_history[idx] for idx in lookback_indices]
-            
-            # Mean & Sample Standard Deviation (Bessel's correction ddof=1)
-            mu_t = float(np.mean(historical_samples))
-            if len(historical_samples) > 1:
-                sigma_t = float(np.std(historical_samples, ddof=1))
+            # If active re-anchoring is in effect (Structural Plateau), use the reanchored baseline
+            if active_reanchor_baseline is not None and current_state == "CONFIRMED_STRUCTURAL_PLATEAU":
+                mu_t = active_reanchor_baseline
+                # Use historical CV or floor for sigma
+                sigma_eff = max(self.sigma_floor, mu_t * 0.20)
+                is_reanchored = True
             else:
-                sigma_t = 0.0
-                
-            sigma_eff = max(sigma_t, self.sigma_floor)
+                lookback_indices = [t - 7 * w for w in range(1, self.lookback_weeks + 1) if (t - 7 * w) >= 0]
+                if len(lookback_indices) < 2:
+                    lookback_indices = [t - i for i in range(1, 15) if (t - i) >= 0]
+                    
+                historical_samples = [winsorized_history[idx] for idx in lookback_indices]
+                mu_t = float(np.mean(historical_samples))
+                if len(historical_samples) > 1:
+                    sigma_t = float(np.std(historical_samples, ddof=1))
+                else:
+                    sigma_t = 0.0
+                sigma_eff = max(sigma_t, self.sigma_floor)
+                is_reanchored = False
             
             # --- 3. Compute Deviation & Z-Score ---
             z_score = (x_t - mu_t) / sigma_eff
@@ -108,12 +115,14 @@ class AnomalyDetectionEngine:
             is_anomaly = False
             
             if current_state in ["NORMAL", "RESOLVED_ONE_OFF", "RESOLVED_MULTI_DAY_SURGE", "CALIBRATION_PERIOD"]:
+                active_reanchor_baseline = None
+                surge_samples = []
                 # Check for new spike onset
                 if z_score >= self.entry_z and x_t >= self.volume_gate:
                     current_state = "PROVISIONAL_ALERT"
                     active_streak = 1
                     is_anomaly = True
-                    # Winsorize future baseline calculation to prevent poisoning
+                    surge_samples = [x_t]
                     winsorized_history[t] = mu_t
                 elif z_score <= -self.entry_z and mu_t >= self.volume_gate:
                     current_state = "DEMAND_COLLAPSE"
@@ -125,12 +134,13 @@ class AnomalyDetectionEngine:
                     active_streak = 0
             
             elif current_state == "PROVISIONAL_ALERT":
+                surge_samples.append(x_t)
                 # Day t+1 of a surge: 3-Zone Quantitative Reconciliation
                 if z_score <= self.exit_z:
                     current_state = "RESOLVED_ONE_OFF"
                     active_streak = 0
                     is_anomaly = False
-                    # Normal value returned: preserve in history
+                    surge_samples = []
                 elif self.exit_z < z_score < self.intermediate_z:
                     current_state = "PARTIALLY_ELEVATED_WATCH"
                     active_streak = 2
@@ -143,17 +153,22 @@ class AnomalyDetectionEngine:
                     winsorized_history[t] = mu_t
             
             elif current_state in ["ELEVATED_SURGE_DAY_2", "PARTIALLY_ELEVATED_WATCH"]:
+                surge_samples.append(x_t)
                 # Day t+2 (or subsequent days of surge)
                 if z_score <= self.exit_z:
                     current_state = "RESOLVED_MULTI_DAY_SURGE"
                     active_streak = 0
                     is_anomaly = False
+                    surge_samples = []
                 elif z_score >= self.intermediate_z:
-                    # 3rd consecutive elevated day: plateau confirmed
+                    # 3rd consecutive elevated day: plateau confirmed -> Execute Changepoint Re-Anchoring
                     current_state = "CONFIRMED_STRUCTURAL_PLATEAU"
                     active_streak += 1
                     is_anomaly = True
                     winsorized_history[t] = x_t
+                    # Re-anchor baseline to average of streak sales
+                    pre_shift_baseline = mu_t
+                    active_reanchor_baseline = float(np.mean(surge_samples))
                 else:
                     # 1.0 < z_score < 2.0: intermediate cooling watch
                     current_state = "PARTIALLY_ELEVATED_WATCH"
@@ -163,13 +178,19 @@ class AnomalyDetectionEngine:
             
             elif current_state == "CONFIRMED_STRUCTURAL_PLATEAU":
                 if z_score <= self.exit_z:
+                    # Plateau/Season has ended: revert baseline to historical normal
                     current_state = "NORMAL"
                     active_streak = 0
                     is_anomaly = False
+                    active_reanchor_baseline = None
+                    surge_samples = []
                 else:
                     active_streak += 1
                     is_anomaly = True
                     winsorized_history[t] = x_t
+                    surge_samples.append(x_t)
+                    # Continuously adapt reanchored plateau baseline to current plateau run-rate
+                    active_reanchor_baseline = float(np.mean(surge_samples[-7:]))
                     
             results.append({
                 'day': day_label,
@@ -182,7 +203,8 @@ class AnomalyDetectionEngine:
                 'z_score': round(z_score, 2),
                 'status': current_state,
                 'streak_day': active_streak,
-                'is_anomaly': is_anomaly
+                'is_anomaly': is_anomaly,
+                'is_reanchored': is_reanchored,
+                'pre_shift_baseline': round(pre_shift_baseline, 2) if (pre_shift_baseline is not None and is_reanchored) else None
             })
-            
         return pd.DataFrame(results)
