@@ -21,5 +21,4 @@ search_dataset.py
 Master_Reference_Guide_Autonomous_Supply_Chain.pdf
 generate_master_guide_pdf.py
 *.log
-
-
+inventory.db
