@@ -143,18 +143,20 @@ class AnomalyDetectionEngine:
                     winsorized_history[t] = mu_t
             
             elif current_state in ["ELEVATED_SURGE_DAY_2", "PARTIALLY_ELEVATED_WATCH"]:
-                # Day t+2 of surge
+                # Day t+2 (or subsequent days of surge)
                 if z_score <= self.exit_z:
                     current_state = "RESOLVED_MULTI_DAY_SURGE"
                     active_streak = 0
                     is_anomaly = False
-                elif z_score >= self.intermediate_z and active_streak >= 2:
+                elif z_score >= self.intermediate_z:
+                    # 3rd consecutive elevated day: plateau confirmed
                     current_state = "CONFIRMED_STRUCTURAL_PLATEAU"
                     active_streak += 1
                     is_anomaly = True
-                    # Structural shift confirmed: re-anchor baseline upward
                     winsorized_history[t] = x_t
                 else:
+                    # 1.0 < z_score < 2.0: intermediate cooling watch
+                    current_state = "PARTIALLY_ELEVATED_WATCH"
                     active_streak += 1
                     is_anomaly = True
                     winsorized_history[t] = mu_t
