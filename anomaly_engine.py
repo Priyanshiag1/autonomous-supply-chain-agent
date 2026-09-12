@@ -91,8 +91,12 @@ class AnomalyDetectionEngine:
             # If active re-anchoring is in effect (Structural Plateau), use the reanchored baseline
             if active_reanchor_baseline is not None and current_state == "CONFIRMED_STRUCTURAL_PLATEAU":
                 mu_t = active_reanchor_baseline
-                # Use historical CV or floor for sigma
-                sigma_eff = max(self.sigma_floor, mu_t * 0.20)
+                # Compute sample standard deviation directly from streak samples (Bessel's correction ddof=1)
+                if len(surge_samples) > 1:
+                    streak_std = float(np.std(surge_samples[-7:], ddof=1))
+                else:
+                    streak_std = 0.0
+                sigma_eff = max(self.sigma_floor, streak_std)
                 is_reanchored = True
             else:
                 lookback_indices = [t - 7 * w for w in range(1, self.lookback_weeks + 1) if (t - 7 * w) >= 0]
