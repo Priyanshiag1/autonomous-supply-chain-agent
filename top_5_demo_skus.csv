@@ -1,0 +1,6 @@
+id,item_id,dept_id,cat_id,store_id,state_id,mean_sales,std_sales,cv,max_sales,max_day,max_date,weekday,peak_ratio,calendar_event,snap_flag
+FOODS_3_090_TX_1_validation,FOODS_3_090,FOODS_3,FOODS,TX_1,TX,34.78,53.19,1.53,259,d_337,2011-12-31,Saturday,7.4,None,0
+FOODS_2_285_TX_1_validation,FOODS_2_285,FOODS_2,FOODS,TX_1,TX,7.32,33.25,4.54,634,d_98,2011-05-06,Friday,86.6,None,1
+FOODS_3_030_CA_1_validation,FOODS_3_030,FOODS_3,FOODS,CA_1,CA,7.53,18.26,2.42,195,d_8,2011-02-05,Saturday,25.9,None,1
+HOBBIES_1_209_TX_1_validation,HOBBIES_1_209,HOBBIES_1,HOBBIES,TX_1,TX,2.79,6.52,2.34,96,d_126,2011-06-03,Friday,34.5,None,1
+HOUSEHOLD_2_440_TX_1_validation,HOUSEHOLD_2_440,HOUSEHOLD_2,HOUSEHOLD,TX_1,TX,2.78,5.61,2.02,65,d_332,2011-12-26,Monday,23.4,None,0
