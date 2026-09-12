@@ -265,14 +265,18 @@ class WarehouseInventoryEngine:
                         f"SAFE BUFFER: Sustained runway is {runway_sustained:.1f} days vs {lead_time}d lead time. Standing by."
                     )
             elif "PLATEAU" in anomaly_status or "SURGE" in anomaly_status:
-                alert_tier = "ELEVATED_DEMAND_ESCALATION"
+                is_below_buffer = (closing_stock <= safety_stock)
+                alert_tier = "RECOVERED_BELOW_SAFETY_BUFFER" if is_below_buffer else "ELEVATED_DEMAND_ESCALATION"
                 target_cover = int(actual_demand * lead_time) + safety_stock
                 effective_stock_pos = closing_stock + pipeline_qty
                 net_deficit = max(0, target_cover - effective_stock_pos)
                 if net_deficit > 0:
                     order_qty = max(reorder_batch, net_deficit)
                     self._place_factory_po(conn, sku_id, state_id, day_index, order_qty, lead_time, is_emergency=True)
-                    actions.append(f"PLATEAU REPLENISHMENT: Committed factory replenishment order of {order_qty} units.")
+                    if is_below_buffer:
+                        actions.append(f"FRAGILE RECOVERY: Demand fulfilled (Unmet=0), but closing stock ({closing_stock}) <= Safety Stock ({safety_stock}). Committed plateau replenishment order of {order_qty} units.")
+                    else:
+                        actions.append(f"PLATEAU REPLENISHMENT: Committed factory replenishment order of {order_qty} units.")
                 else:
                     actions.append(f"Demand elevation monitored. Stock position ({effective_stock_pos} units on-hand/pipeline) covers {target_cover} target.")
             elif closing_stock <= safety_stock:
