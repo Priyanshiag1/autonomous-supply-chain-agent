@@ -825,65 +825,144 @@ with col_dialogue:
         """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 7. Collapsible Multi-Warehouse Network Topology & Highway Pipeline
+# 7. Collapsible Multi-Warehouse Network Topology & SQLite ERP Database Inspector
 # -----------------------------------------------------------------------------
-with st.expander("🌐 Multi-Warehouse Network Topology & Highway In-Transit Pipeline (Click to Expand)", expanded=False):
-    col_tx, col_ca, col_wi, col_ship = st.columns([1, 1, 1, 1.5])
+with st.expander("🗄️ Multi-Warehouse Topology & Live SQLite ERP Database Inspector (Click to Expand)", expanded=False):
+    tab_network, tab_sqlite = st.tabs([
+        "🌐 Multi-Warehouse Network & Highway Pipeline", 
+        "🗄️ Raw SQLite ERP Database Ledger & Tables"
+    ])
+    
+    with tab_network:
+        col_tx, col_ca, col_wi, col_ship = st.columns([1, 1, 1, 1.5])
 
-    tx_m = comp_stocks.get("TX", {})
-    ca_m = comp_stocks.get("CA", {})
-    wi_m = comp_stocks.get("WI", {})
+        tx_m = comp_stocks.get("TX", {})
+        ca_m = comp_stocks.get("CA", {})
+        wi_m = comp_stocks.get("WI", {})
 
-    tx_stock = tx_m.get('current_stock', inv_info['closing_stock'])
-    tx_ss = tx_m.get('safety_stock', 10)
-    tx_surplus = max(0, tx_stock - (2 * tx_ss))
+        tx_stock = tx_m.get('current_stock', inv_info['closing_stock'])
+        tx_ss = tx_m.get('safety_stock', 10)
+        tx_surplus = max(0, tx_stock - (2 * tx_ss))
 
-    ca_stock = ca_m.get('current_stock', 0)
-    ca_ss = ca_m.get('safety_stock', 10)
-    ca_surplus = max(0, ca_stock - (2 * ca_ss))
+        ca_stock = ca_m.get('current_stock', 0)
+        ca_ss = ca_m.get('safety_stock', 10)
+        ca_surplus = max(0, ca_stock - (2 * ca_ss))
 
-    wi_stock = wi_m.get('current_stock', 0)
-    wi_ss = wi_m.get('safety_stock', 10)
-    wi_surplus = max(0, wi_stock - (2 * wi_ss))
+        wi_stock = wi_m.get('current_stock', 0)
+        wi_ss = wi_m.get('safety_stock', 10)
+        wi_surplus = max(0, wi_stock - (2 * wi_ss))
 
-    # Detect transfers dispatched today from companion hubs
-    ca_transferred_today = sum(s['quantity'] for s in shipments if s.get('order_day') == current_day and 'CA' in s.get('source_location', ''))
-    wi_transferred_today = sum(s['quantity'] for s in shipments if s.get('order_day') == current_day and 'WI' in s.get('source_location', ''))
+        # Detect transfers dispatched today from companion hubs
+        ca_transferred_today = sum(s['quantity'] for s in shipments if s.get('order_day') == current_day and 'CA' in s.get('source_location', ''))
+        wi_transferred_today = sum(s['quantity'] for s in shipments if s.get('order_day') == current_day and 'WI' in s.get('source_location', ''))
 
-    ca_status_line = f"<span style='color:#38BDF8; font-weight:600;'>🚛 -{ca_transferred_today} units dispatched to TX</span>" if ca_transferred_today > 0 else (f"<span style='color:#10B981;'>Ready buffer</span>" if ca_surplus > 0 else "<span style='color:#94A3B8;'>At safety threshold</span>")
-    wi_status_line = f"<span style='color:#38BDF8; font-weight:600;'>🚛 -{wi_transferred_today} units dispatched to TX</span>" if wi_transferred_today > 0 else (f"<span style='color:#10B981;'>Ready buffer</span>" if wi_surplus > 0 else "<span style='color:#94A3B8;'>At safety threshold</span>")
+        ca_status_line = f"<span style='color:#38BDF8; font-weight:600;'>🚛 -{ca_transferred_today} units dispatched to TX</span>" if ca_transferred_today > 0 else (f"<span style='color:#10B981;'>Ready buffer</span>" if ca_surplus > 0 else "<span style='color:#94A3B8;'>At safety threshold</span>")
+        wi_status_line = f"<span style='color:#38BDF8; font-weight:600;'>🚛 -{wi_transferred_today} units dispatched to TX</span>" if wi_transferred_today > 0 else (f"<span style='color:#10B981;'>Ready buffer</span>" if wi_surplus > 0 else "<span style='color:#94A3B8;'>At safety threshold</span>")
 
-    with col_tx:
+        with col_tx:
+            st.markdown(f"""
+            <div class='metric-card'>
+                <div class='metric-title'>📍 Texas (Primary Hub)</div>
+                <div class='metric-value'>{tx_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
+                <div class='metric-subtext'>Safety Stock: {tx_ss} | Surplus: {tx_surplus}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_ca:
+            st.markdown(f"""
+            <div class='metric-card'>
+                <div class='metric-title'>📍 California (Companion Hub)</div>
+                <div class='metric-value'>{ca_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
+                <div class='metric-subtext'>Safety: {ca_ss} | Surplus: <b>{ca_surplus:,} units</b><br/>{ca_status_line}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_wi:
+            st.markdown(f"""
+            <div class='metric-card'>
+                <div class='metric-title'>📍 Wisconsin (Companion Hub)</div>
+                <div class='metric-value'>{wi_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
+                <div class='metric-subtext'>Safety: {wi_ss} | Surplus: <b>{wi_surplus:,} units</b><br/>{wi_status_line}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_ship:
+            if shipments:
+                display_tbl = pd.DataFrame(shipments)[['shipment_type', 'quantity', 'arrival_day', 'source_location', 'status']].copy()
+                display_tbl.columns = ['Type', 'Units', 'Arrives Day', 'Source', 'Status']
+                st.dataframe(display_tbl, hide_index=True, use_container_width=True)
+            else:
+                st.markdown("<div style='color:#64748B; font-size:0.8rem; padding:8px;'>No active shipments currently on the highway. All historical orders delivered.</div>", unsafe_allow_html=True)
+
+    with tab_sqlite:
+        sim_db_path = f"sim_{current_sku[:12]}_{current_state}.db"
         st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-title'>📍 Texas (Primary Hub)</div>
-            <div class='metric-value'>{tx_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
-            <div class='metric-subtext'>Safety Stock: {tx_ss} | Surplus: {tx_surplus}</div>
+        <div style='background:#0F172A; border:1px solid #1E293B; border-radius:6px; padding:8px 12px; margin-bottom:10px; font-size:0.75rem; color:#94A3B8;'>
+            💾 <b>Physical SQLite Database:</b> <code>{sim_db_path}</code> &nbsp;|&nbsp; 
+            <b>Storage Engine:</b> SQLite3 ACID Relational Ledger &nbsp;|&nbsp; 
+            <b>Live Filter:</b> Transactions up to Day {current_day}
         </div>
         """, unsafe_allow_html=True)
+        
+        sub_ledger, sub_shipments, sub_master = st.tabs([
+            "📋 Daily Transaction Ledger (`inventory_daily_ledger`)",
+            "🚛 Inbound Highway Orders (`inbound_shipments`)",
+            "🏢 Multi-Echelon Stock Master (`warehouse_inventory`)"
+        ])
+        
+        try:
+            with sqlite3.connect(sim_db_path) as conn:
+                with sub_ledger:
+                    q_ledger = """
+                        SELECT day_index as Day, 
+                               opening_stock as 'Opening Stock', 
+                               inbound_received as 'Inbound Rcvd', 
+                               actual_demand as 'POS Demand', 
+                               fulfilled_demand as 'Fulfilled', 
+                               unmet_demand as 'Unmet Backlog', 
+                               closing_stock as 'Closing Stock', 
+                               CASE WHEN stockout_occurred = 1 THEN '🚨 STOCKOUT' ELSE 'OK' END as 'Incident Status',
+                               action_taken as 'Autonomous Action'
+                        FROM inventory_daily_ledger 
+                        WHERE day_index <= ? 
+                        ORDER BY day_index DESC 
+                        LIMIT 15
+                    """
+                    df_raw_ledger = pd.read_sql(q_ledger, conn, params=(current_day,))
+                    st.dataframe(df_raw_ledger, hide_index=True, use_container_width=True)
+                    st.caption(f"Showing last 15 days of physical warehouse ledger accounting ending on active Day {current_day}")
 
-    with col_ca:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-title'>📍 California (Companion Hub)</div>
-            <div class='metric-value'>{ca_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
-            <div class='metric-subtext'>Safety: {ca_ss} | Surplus: <b>{ca_surplus:,} units</b><br/>{ca_status_line}</div>
-        </div>
-        """, unsafe_allow_html=True)
+                with sub_shipments:
+                    q_ship = """
+                        SELECT shipment_id as 'Shipment ID',
+                               shipment_type as 'Type',
+                               quantity as 'Units',
+                               order_day as 'Ordered On',
+                               arrival_day as 'Arrives On',
+                               source_location as 'Source Location',
+                               status as 'Pipeline Status'
+                        FROM inbound_shipments
+                        WHERE order_day <= ?
+                        ORDER BY order_day DESC
+                        LIMIT 15
+                    """
+                    df_raw_ship = pd.read_sql(q_ship, conn, params=(current_day,))
+                    st.dataframe(df_raw_ship, hide_index=True, use_container_width=True)
+                    st.caption(f"Active in-transit highway pipeline and delivered shipments as of Day {current_day}")
 
-    with col_wi:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-title'>📍 Wisconsin (Companion Hub)</div>
-            <div class='metric-value'>{wi_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
-            <div class='metric-subtext'>Safety: {wi_ss} | Surplus: <b>{wi_surplus:,} units</b><br/>{wi_status_line}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col_ship:
-        if shipments:
-            display_tbl = pd.DataFrame(shipments)[['shipment_type', 'quantity', 'arrival_day', 'source_location', 'status']].copy()
-            display_tbl.columns = ['Type', 'Units', 'Arrives Day', 'Source', 'Status']
-            st.dataframe(display_tbl, hide_index=True, use_container_width=True)
-        else:
-            st.markdown("<div style='color:#64748B; font-size:0.8rem; padding:8px;'>No active shipments currently on the highway. All historical orders delivered.</div>", unsafe_allow_html=True)
+                with sub_master:
+                    q_master = """
+                        SELECT sku_id as 'SKU ID',
+                               state_id as 'Regional Hub',
+                               current_stock as 'Current Stock',
+                               safety_stock as 'Safety Buffer',
+                               lead_time_days as 'Lead Time (Days)',
+                               reorder_batch_size as 'Reorder Batch Size',
+                               last_updated_day as 'Last Updated Day'
+                        FROM warehouse_inventory
+                    """
+                    df_raw_master = pd.read_sql(q_master, conn)
+                    st.dataframe(df_raw_master, hide_index=True, use_container_width=True)
+                    st.caption("Multi-echelon regional inventory balance across CA, TX, and WI warehouses.")
+        except Exception as e:
+            st.error(f"Error querying SQLite database: {e}")
