@@ -228,6 +228,18 @@ if "selected_sku_id" not in st.session_state:
     st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
 if "current_day_num" not in st.session_state:
     st.session_state.current_day_num = 9
+if "slider_sidebar" not in st.session_state:
+    st.session_state.slider_sidebar = st.session_state.current_day_num
+if "slider_main" not in st.session_state:
+    st.session_state.slider_main = st.session_state.current_day_num
+
+def on_sidebar_slider_change():
+    st.session_state.current_day_num = st.session_state.slider_sidebar
+    st.session_state.slider_main = st.session_state.slider_sidebar
+
+def on_main_slider_change():
+    st.session_state.current_day_num = st.session_state.slider_main
+    st.session_state.slider_sidebar = st.session_state.slider_main
 
 # 1. Pinned Strategic Archetypes (Quick Jump Shortcuts)
 st.sidebar.markdown("<div style='font-size:0.82rem; font-weight:700; color:#CBD5E1; margin-bottom:6px;'>📌 Pinned Strategic Scenarios:</div>", unsafe_allow_html=True)
@@ -237,23 +249,33 @@ with col_b1:
     if st.button("🏈 Day 9 (SuperBowl)", use_container_width=True):
         st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
         st.session_state.current_day_num = 9
+        st.session_state.slider_sidebar = 9
+        st.session_state.slider_main = 9
         st.rerun()
     if st.button("🛡️ Day 126 (Guardrail)", use_container_width=True):
         st.session_state.selected_sku_id = "HOBBIES_1_209_TX_1_validation"
         st.session_state.current_day_num = 126
+        st.session_state.slider_sidebar = 126
+        st.session_state.slider_main = 126
         st.rerun()
     if st.button("📈 Day 343 (Plateau)", use_container_width=True):
         st.session_state.selected_sku_id = "HOUSEHOLD_2_440_TX_1_validation"
         st.session_state.current_day_num = 343
+        st.session_state.slider_sidebar = 343
+        st.session_state.slider_main = 343
         st.rerun()
 with col_b2:
     if st.button("💥 Day 98 (Mega SNAP)", use_container_width=True):
         st.session_state.selected_sku_id = "FOODS_2_285_TX_1_validation"
         st.session_state.current_day_num = 98
+        st.session_state.slider_sidebar = 98
+        st.session_state.slider_main = 98
         st.rerun()
     if st.button("📦 Day 332 (Impulse)", use_container_width=True):
         st.session_state.selected_sku_id = "HOUSEHOLD_2_440_TX_1_validation"
         st.session_state.current_day_num = 332
+        st.session_state.slider_sidebar = 332
+        st.session_state.slider_main = 332
         st.rerun()
 
 # 2. Always-Visible Live Catalog Search (9,147 Products)
@@ -297,17 +319,17 @@ sku_row_meta = m5_df[m5_df['id'] == current_sku].iloc[0]
 current_state = sku_row_meta['state_id']
 current_cat = sku_row_meta['cat_id']
 
-# Timeline Slider
+# 3. Sidebar Timeline Slider
 st.sidebar.markdown("---")
-day_slider = st.sidebar.slider(
+st.sidebar.slider(
     "Timeline Scrubber (Historical Replay):",
     min_value=1,
     max_value=365,
-    value=st.session_state.current_day_num,
+    key="slider_sidebar",
+    on_change=on_sidebar_slider_change,
     step=1,
     format="Day %d"
 )
-st.session_state.current_day_num = day_slider
 current_day = st.session_state.current_day_num
 day_col_tag = f"d_{current_day}"
 
@@ -569,6 +591,16 @@ with col_chart:
         )
     )
     st.plotly_chart(fig, use_container_width=True)
+    
+    st.slider(
+        "⏩ Timeline Scrubber (Scrub 365 Days of Digital Twin History):",
+        min_value=1,
+        max_value=365,
+        key="slider_main",
+        on_change=on_main_slider_change,
+        step=1,
+        format="Day %d"
+    )
 
 with col_dialogue:
     st.markdown("<div style='font-size:0.88rem; font-weight:700; color:#F1F5F9; margin-bottom:4px;'>💬 Live Inter-Agent Operations Dialogue</div>", unsafe_allow_html=True)
@@ -620,6 +652,18 @@ with col_dialogue:
             
         st.markdown(f"""
                 <div style='margin-top:6px; font-style:italic; font-size:0.78rem; color:#94A3B8;'>"{a2['conversational_dialogue']}"</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif today_status == "CALIBRATION_PERIOD" or current_day <= 14:
+        st.markdown(f"""
+        <div class='agent-card' style='border-left-color: #38BDF8;'>
+            <div style='color:#38BDF8; font-size:0.88rem; font-weight:700; margin-bottom:4px;'>
+                ⚙️ Baseline Calibration Phase (Day {current_day} of 14)
+            </div>
+            <div style='color:#CBD5E1; font-size:0.82rem; line-height:1.4;'>
+                System is actively profiling historical distribution and 6-week day-of-week seasonality (14-day warm-up window). 
+                Automated statistical anomaly detection and autonomous multi-agent rebalancing will activate on Day 15.
             </div>
         </div>
         """, unsafe_allow_html=True)
