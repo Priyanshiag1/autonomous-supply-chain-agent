@@ -157,15 +157,16 @@ class RootCauseIntelligenceEngine:
             tier_level = "TIER_2_STATISTICAL"
             
             # Duration & Velocity Fingerprint
+            mult = actual_sales / max(baseline_mean, 0.5)
             if status == "PROVISIONAL_ALERT" or streak_day == 1:
                 classification = "B2B_WHOLESALE_IMPULSE"
-                shape_reason = "High-velocity single-day impulse shock; characteristic of institutional B2B distributor restocking."
+                shape_reason = f"High-velocity single-day impulse shock ({mult:.1f}x baseline velocity); characteristic of institutional B2B distributor restocking."
             elif "PLATEAU" in status or streak_day >= 3:
                 classification = "PROMOTIONAL_OR_VIRAL_PLATEAU"
-                shape_reason = "Multi-day sustained elevation; characteristic of unannounced store promotional campaign or local viral adoption."
+                shape_reason = f"Sustained {streak_day}-day demand elevation ({mult:.1f}x baseline); characteristic of unannounced store promotional campaign or local viral adoption."
             else:
                 classification = "MULTI_DAY_ELEVATED_SURGE"
-                shape_reason = "Multi-day elevated demand velocity; active demand wave under surveillance."
+                shape_reason = f"Consecutive Day {streak_day} demand surge ({actual_sales:.0f} units, {mult:.1f}x baseline); active demand wave under surveillance."
                 
             # Cross-State Scope
             if cross_state_spiked:
