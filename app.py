@@ -549,6 +549,49 @@ with col_chart:
     upper_tunnel = [b + (2.0 * s) for b, s in zip(view_baselines, view_sigmas)]
     lower_tunnel = [max(0.0, b - (2.0 * s)) for b, s in zip(view_baselines, view_sigmas)]
 
+    # Detect all anomaly spikes in view window for interactive highlighting
+    spike_days = []
+    spike_dates = []
+    spike_sales = []
+    spike_z = []
+    spike_colors = []
+    
+    for d in view_days:
+        s_row = anom_df[anom_df['day'] == f"d_{d}"]
+        if not s_row.empty:
+            z_val = float(s_row['z_score'].iloc[0]) if pd.notnull(s_row['z_score'].iloc[0]) else 0.0
+            stat_val = str(s_row['status'].iloc[0])
+        else:
+            z_val = 0.0
+            stat_val = "NORMAL"
+            
+        s_sale = full_sales[d - 1]
+        stockout_flag = sim_days[d]['inv']['stockout_occurred']
+        
+        if (z_val >= 2.0 and s_sale > 0) or ("PLATEAU" in stat_val and s_sale > 0) or stockout_flag:
+            spike_days.append(d)
+            spike_dates.append(cal_df[cal_df['d'] == f"d_{d}"]['date'].iloc[0])
+            spike_sales.append(s_sale)
+            spike_z.append(z_val)
+            spike_colors.append('#EF4444' if (z_val >= 2.5 or stockout_flag) else '#F59E0B')
+
+    # Clickable spike quick-jump chips
+    if spike_days:
+        st.markdown("<div style='font-size:0.75rem; color:#FBBF24; font-weight:600; margin-bottom:4px;'>⚡ Detected Spikes in Window (Click to jump & inspect root-cause):</div>", unsafe_allow_html=True)
+        recent_spikes = spike_days[-6:]
+        pill_cols = st.columns(len(recent_spikes))
+        for idx, spk_d in enumerate(recent_spikes):
+            with pill_cols[idx]:
+                spk_idx = spike_days.index(spk_d)
+                spk_z_val = spike_z[spk_idx]
+                label = f"Day {spk_d} ({spk_z_val:+.1f}σ)"
+                if st.button(f"⚡ {label}", key=f"btn_jump_{current_sku}_{spk_d}", use_container_width=True):
+                    st.session_state.current_day_num = spk_d
+                    st.session_state.slider_sidebar = spk_d
+                    st.session_state.slider_main = spk_d
+                    st.query_params["day"] = str(spk_d)
+                    st.rerun()
+
     fig = go.Figure()
 
     # 1. Shaded Confidence Tunnel (+/- 2 Sigma)
@@ -571,21 +614,42 @@ with col_chart:
         name='Baseline (μ)'
     ))
 
-    # 3. Actual POS Demand Line
+    # 3. Actual POS Demand Line (With clickable customdata)
     fig.add_trace(go.Scatter(
         x=view_dates, y=view_sales,
         mode='lines+markers',
         line=dict(color='#38BDF8', width=2.5),
         marker=dict(size=5, color='#38BDF8'),
+        customdata=view_days,
+        hovertemplate="<b>Day %{customdata} (%{x})</b><br>Sales: %{y} units<extra>POS DEMAND</extra>",
         name='Actual Sales (POS)'
     ))
 
-    # 3b. Physical Warehouse Stock Level (Sawtooth curve)
+    # 3b. Highlighted Demand Spike Markers (Prominent Amber/Red Diamonds - Click to Jump!)
+    if spike_days:
+        fig.add_trace(go.Scatter(
+            x=spike_dates, y=spike_sales,
+            mode='markers',
+            marker=dict(
+                symbol='diamond',
+                size=12,
+                color=spike_colors,
+                line=dict(color='#FFFFFF', width=1.8)
+            ),
+            customdata=spike_days,
+            text=[f"{z:+.2f}σ" for z in spike_z],
+            hovertemplate="<b>⚡ Day %{customdata} (%{x})</b><br>Actual Sales: <b>%{y} units</b><br>Deviation: <b>%{text}</b><br><i>👉 Click to jump directly to this day!</i><extra>DETECTED SPIKE</extra>",
+            name='⚡ Spike Points'
+        ))
+
+    # 3c. Physical Warehouse Stock Level (Sawtooth curve)
     view_stocks = [sim_days[d]['inv']['closing_stock'] for d in view_days]
     fig.add_trace(go.Scatter(
         x=view_dates, y=view_stocks,
         mode='lines',
         line=dict(color='#10B981', width=2),
+        customdata=view_days,
+        hovertemplate="<b>Day %{customdata} (%{x})</b><br>Stock: %{y} units<extra>WAREHOUSE</extra>",
         name='Warehouse Stock'
     ))
 
@@ -594,13 +658,16 @@ with col_chart:
     fig.add_trace(go.Scatter(
         x=[date_str], y=[today_sales],
         mode='markers',
-        marker=dict(size=13, color=today_marker_color, line=dict(color='#FFFFFF', width=2)),
+        marker=dict(size=14, color=today_marker_color, line=dict(color='#FFFFFF', width=2.5)),
+        customdata=[current_day],
+        hovertemplate=f"<b>Current Active Day: Day {current_day} ({date_str})</b><br>Sales: {today_sales} units ({today_z:+.2f}σ)<extra>ACTIVE DAY</extra>",
         name=f"Day {current_day} ({today_z:+.2f}σ)"
     ))
 
     fig.update_layout(
         paper_bgcolor='#111827',
         plot_bgcolor='#111827',
+        clickmode='event+select',
         margin=dict(l=15, r=15, t=10, b=10),
         height=335,
         legend=dict(
@@ -621,7 +688,42 @@ with col_chart:
             title=dict(text="Units", font=dict(size=10, color='#94A3B8'))
         )
     )
-    st.plotly_chart(fig, use_container_width=True)
+    
+    chart_event = st.plotly_chart(
+        fig,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode=["points"],
+        key=f"chart_{current_sku}_{current_day}"
+    )
+
+    # Process interactive click on Plotly graph points
+    date_to_day_lookup = dict(zip(cal_df['date'], [int(x.replace('d_', '')) for x in cal_df['d']]))
+    if chart_event and "selection" in chart_event and chart_event["selection"].get("points"):
+        pts = chart_event["selection"]["points"]
+        if pts:
+            clicked_pt = pts[0]
+            target_jump_day = None
+            if "customdata" in clicked_pt and clicked_pt["customdata"] is not None:
+                cd = clicked_pt["customdata"]
+                target_jump_day = cd[0] if isinstance(cd, (list, tuple)) else cd
+            if target_jump_day is None and "x" in clicked_pt:
+                x_val = str(clicked_pt["x"]).split("T")[0]
+                target_jump_day = date_to_day_lookup.get(x_val)
+                
+            if target_jump_day is not None:
+                try:
+                    t_day = int(target_jump_day)
+                    if 1 <= t_day <= 365 and t_day != current_day:
+                        st.session_state.current_day_num = t_day
+                        st.session_state.slider_sidebar = t_day
+                        st.session_state.slider_main = t_day
+                        st.query_params["day"] = str(t_day)
+                        st.rerun()
+                except (ValueError, TypeError):
+                    pass
+
+    st.caption("💡 **Interactive Graph:** Click directly on any spike diamond (or point) on the chart to immediately jump to that day and inspect Agent 1 & Agent 2 causal reasoning.")
     
     active_clean_sku = current_sku.replace("_validation", "")
     st.slider(
