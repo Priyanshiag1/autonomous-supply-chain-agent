@@ -223,59 +223,88 @@ def run_continuous_simulation(sku_id: str, state_id: str, cat_id: str):
 st.sidebar.markdown("<div style='font-size:1.1rem; font-weight:800; color:#38BDF8;'>INTELLIMARK AI</div>", unsafe_allow_html=True)
 st.sidebar.markdown("<div style='font-size:0.75rem; color:#94A3B8; margin-bottom:12px;'>Autonomous Supply Chain Digital Twin</div>", unsafe_allow_html=True)
 
-# Unified Session State Management
+# Unified Session State & URL Query Param Persistence
+qp_sku = st.query_params.get("sku", None)
+qp_day = st.query_params.get("day", None)
+
 if "selected_sku_id" not in st.session_state:
-    st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
+    if qp_sku and (qp_sku in m5_df['id'].values):
+        st.session_state.selected_sku_id = qp_sku
+    else:
+        st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
+
 if "current_day_num" not in st.session_state:
-    st.session_state.current_day_num = 9
+    try:
+        init_day = int(qp_day) if qp_day else 9
+        st.session_state.current_day_num = max(1, min(365, init_day))
+    except (ValueError, TypeError):
+        st.session_state.current_day_num = 9
+
 if "slider_sidebar" not in st.session_state:
     st.session_state.slider_sidebar = st.session_state.current_day_num
 if "slider_main" not in st.session_state:
     st.session_state.slider_main = st.session_state.current_day_num
 
+# Ensure URL reflects current state
+st.query_params["sku"] = st.session_state.selected_sku_id
+st.query_params["day"] = str(st.session_state.current_day_num)
+
 def on_sidebar_slider_change():
     st.session_state.current_day_num = st.session_state.slider_sidebar
     st.session_state.slider_main = st.session_state.slider_sidebar
+    st.query_params["day"] = str(st.session_state.slider_sidebar)
 
 def on_main_slider_change():
     st.session_state.current_day_num = st.session_state.slider_main
     st.session_state.slider_sidebar = st.session_state.slider_main
+    st.query_params["day"] = str(st.session_state.slider_main)
 
 # 1. Pinned Strategic Archetypes (Quick Jump Shortcuts)
 st.sidebar.markdown("<div style='font-size:0.82rem; font-weight:700; color:#CBD5E1; margin-bottom:6px;'>📌 Pinned Strategic Scenarios:</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='font-size:0.7rem; color:#94A3B8; margin-top:-4px; margin-bottom:8px;'>Directly loads curated SKU & Day archetype:</div>", unsafe_allow_html=True)
 
 col_b1, col_b2 = st.sidebar.columns(2)
 with col_b1:
-    if st.button("🏈 Day 9 (SuperBowl)", use_container_width=True):
+    if st.button("🏈 Day 9 (SuperBowl • FOODS_3)", use_container_width=True, help="SuperBowl event match on FOODS_3_090_TX_1"):
         st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
         st.session_state.current_day_num = 9
         st.session_state.slider_sidebar = 9
         st.session_state.slider_main = 9
+        st.query_params["sku"] = "FOODS_3_090_TX_1_validation"
+        st.query_params["day"] = "9"
         st.rerun()
-    if st.button("🛡️ Day 126 (Guardrail)", use_container_width=True):
+    if st.button("🛡️ Day 126 (Guardrail • HOBBIES)", use_container_width=True, help="SNAP guardrail suppression on HOBBIES_1_209_TX_1"):
         st.session_state.selected_sku_id = "HOBBIES_1_209_TX_1_validation"
         st.session_state.current_day_num = 126
         st.session_state.slider_sidebar = 126
         st.session_state.slider_main = 126
+        st.query_params["sku"] = "HOBBIES_1_209_TX_1_validation"
+        st.query_params["day"] = "126"
         st.rerun()
-    if st.button("📈 Day 343 (Plateau)", use_container_width=True):
+    if st.button("📈 Day 343 (Plateau • HOUSEHOLD)", use_container_width=True, help="Plateau sustained shift on HOUSEHOLD_2_440_TX_1"):
         st.session_state.selected_sku_id = "HOUSEHOLD_2_440_TX_1_validation"
         st.session_state.current_day_num = 343
         st.session_state.slider_sidebar = 343
         st.session_state.slider_main = 343
+        st.query_params["sku"] = "HOUSEHOLD_2_440_TX_1_validation"
+        st.query_params["day"] = "343"
         st.rerun()
 with col_b2:
-    if st.button("💥 Day 98 (Mega SNAP)", use_container_width=True):
+    if st.button("💥 Day 98 (Mega SNAP • FOODS_2)", use_container_width=True, help="SNAP mega surge & stockout rebalance on FOODS_2_285_TX_1"):
         st.session_state.selected_sku_id = "FOODS_2_285_TX_1_validation"
         st.session_state.current_day_num = 98
         st.session_state.slider_sidebar = 98
         st.session_state.slider_main = 98
+        st.query_params["sku"] = "FOODS_2_285_TX_1_validation"
+        st.query_params["day"] = "98"
         st.rerun()
-    if st.button("📦 Day 332 (Impulse)", use_container_width=True):
+    if st.button("📦 Day 332 (Impulse • HOUSEHOLD)", use_container_width=True, help="Impulse spike & multi-echelon transfer on HOUSEHOLD_2_440_TX_1"):
         st.session_state.selected_sku_id = "HOUSEHOLD_2_440_TX_1_validation"
         st.session_state.current_day_num = 332
         st.session_state.slider_sidebar = 332
         st.session_state.slider_main = 332
+        st.query_params["sku"] = "HOUSEHOLD_2_440_TX_1_validation"
+        st.query_params["day"] = "332"
         st.rerun()
 
 # 2. Always-Visible Live Catalog Search (9,147 Products)
@@ -313,6 +342,7 @@ chosen_sku = st.sidebar.selectbox(
 
 if chosen_sku != st.session_state.selected_sku_id:
     st.session_state.selected_sku_id = chosen_sku
+    st.query_params["sku"] = chosen_sku
     st.rerun()
 
 current_sku = st.session_state.selected_sku_id
@@ -323,7 +353,7 @@ current_cat = sku_row_meta['cat_id']
 # 3. Sidebar Timeline Slider
 st.sidebar.markdown("---")
 st.sidebar.slider(
-    "Timeline Scrubber (Historical Replay):",
+    f"Timeline Scrubber (Day {st.session_state.current_day_num}/365):",
     min_value=1,
     max_value=365,
     key="slider_sidebar",
@@ -593,8 +623,9 @@ with col_chart:
     )
     st.plotly_chart(fig, use_container_width=True)
     
+    active_clean_sku = current_sku.replace("_validation", "")
     st.slider(
-        "⏩ Timeline Scrubber (Scrub 365 Days of Digital Twin History):",
+        f"⏩ Timeline Scrubber: Day {current_day} of 365 (Product: {active_clean_sku} • {current_state} Hub)",
         min_value=1,
         max_value=365,
         key="slider_main",
