@@ -364,11 +364,11 @@ class WarehouseInventoryEngine:
                 actions.append(f"CRITICAL: Stockout of {unmet_demand} units! Warehouse inventory clamped to 0.")
                 
                 # Check for Inter-Warehouse Transfer from companion states (Fast 1-day transit)
-                transfer_qty = self._find_and_dispatch_transfer(
+                transfer_qty, donor_state = self._find_and_dispatch_transfer(
                     conn, sku_id, requesting_state=state_id, needed_qty=unmet_demand + safety_stock, current_day=day_index
                 )
                 if transfer_qty > 0:
-                    actions.append(f"Dispatched expedited inter-warehouse transfer of {transfer_qty} units (Arrival: Day {day_index+1}).")
+                    actions.append(f"Dispatched expedited inter-warehouse transfer of {transfer_qty} units from {donor_state} Hub (Arrival: Day {day_index+1}).")
                 
                 # Net Requirements Planning (Accounting for Pipeline Stock & Inbound Transfer)
                 gross_deficit = unmet_demand + safety_stock
@@ -474,7 +474,7 @@ class WarehouseInventoryEngine:
         requesting_state: str,
         needed_qty: int,
         current_day: int
-    ) -> int:
+    ) -> Tuple[int, str]:
         """
         Scans companion warehouses in other states for surplus stock above 2x safety buffer.
         If surplus is found, dispatches an expedited 1-day inter-warehouse transfer.
@@ -516,9 +516,9 @@ class WarehouseInventoryEngine:
                     VALUES (?, ?, ?, ?, ?, ?, 'INTER_WAREHOUSE_TRANSFER', 'IN_TRANSIT', ?)
                 """, (shipment_id, sku_id, requesting_state, current_day, current_day + 1, transfer_qty, f"{donor_state}_WAREHOUSE"))
                 
-                return transfer_qty
+                return transfer_qty, donor_state
                 
-        return 0
+        return 0, ""
 
     def _place_factory_po(
         self,

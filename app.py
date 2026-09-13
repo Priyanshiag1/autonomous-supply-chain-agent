@@ -708,6 +708,13 @@ with st.expander("🌐 Multi-Warehouse Network Topology & Highway In-Transit Pip
     wi_ss = wi_m.get('safety_stock', 10)
     wi_surplus = max(0, wi_stock - (2 * wi_ss))
 
+    # Detect transfers dispatched today from companion hubs
+    ca_transferred_today = sum(s['quantity'] for s in shipments if s.get('order_day') == current_day and 'CA' in s.get('source_location', ''))
+    wi_transferred_today = sum(s['quantity'] for s in shipments if s.get('order_day') == current_day and 'WI' in s.get('source_location', ''))
+
+    ca_status_line = f"<span style='color:#38BDF8; font-weight:600;'>🚛 -{ca_transferred_today} units dispatched to TX</span>" if ca_transferred_today > 0 else (f"<span style='color:#10B981;'>Ready buffer</span>" if ca_surplus > 0 else "<span style='color:#94A3B8;'>At safety threshold</span>")
+    wi_status_line = f"<span style='color:#38BDF8; font-weight:600;'>🚛 -{wi_transferred_today} units dispatched to TX</span>" if wi_transferred_today > 0 else (f"<span style='color:#10B981;'>Ready buffer</span>" if wi_surplus > 0 else "<span style='color:#94A3B8;'>At safety threshold</span>")
+
     with col_tx:
         st.markdown(f"""
         <div class='metric-card'>
@@ -720,9 +727,9 @@ with st.expander("🌐 Multi-Warehouse Network Topology & Highway In-Transit Pip
     with col_ca:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-title'>📍 California (Donor Hub)</div>
+            <div class='metric-title'>📍 California (Companion Hub)</div>
             <div class='metric-value'>{ca_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
-            <div class='metric-subtext'>Safety Stock: {ca_ss} | Available Surplus: <b>{ca_surplus:,} units</b></div>
+            <div class='metric-subtext'>Safety: {ca_ss} | Surplus: <b>{ca_surplus:,} units</b><br/>{ca_status_line}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -731,7 +738,7 @@ with st.expander("🌐 Multi-Warehouse Network Topology & Highway In-Transit Pip
         <div class='metric-card'>
             <div class='metric-title'>📍 Wisconsin (Companion Hub)</div>
             <div class='metric-value'>{wi_stock:,} <span style='font-size:0.75rem; color:#94A3B8;'>units</span></div>
-            <div class='metric-subtext'>Safety Stock: {wi_ss} | Available Surplus: <b>{wi_surplus:,} units</b></div>
+            <div class='metric-subtext'>Safety: {wi_ss} | Surplus: <b>{wi_surplus:,} units</b><br/>{wi_status_line}</div>
         </div>
         """, unsafe_allow_html=True)
 
