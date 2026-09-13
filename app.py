@@ -307,7 +307,8 @@ else:
 chosen_sku = st.sidebar.selectbox(
     f"Active Product ({len(sku_options):,} available):",
     options=sku_options,
-    index=sku_idx
+    index=sku_idx,
+    key=f"sku_picker_{st.session_state.selected_sku_id}"
 )
 
 if chosen_sku != st.session_state.selected_sku_id:
