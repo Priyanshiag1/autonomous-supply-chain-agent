@@ -1,46 +1,78 @@
-# Autonomous Multi-Agent Demand-Sensing & Inventory Rebalancing System
+# ⚡ StockSentinel — Autonomous Demand-Sensing & Inventory Rebalancing Digital Twin
 
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/UI-Streamlit%20%7C%20Plotly-FF4B4B.svg)](https://streamlit.io/)
 [![Database](https://img.shields.io/badge/Ledger-SQLite3-003B57.svg)](https://www.sqlite.org/)
 [![Benchmark](https://img.shields.io/badge/Data-Walmart%20M5%20Forecasting-0071DC.svg)](https://mofc.unic.ac.cy/m5-competition/)
-[![Architecture](https://img.shields.io/badge/Multi--Agent-Communicating%20State%20Machine-success.svg)](#system-architecture)
+[![Architecture](https://img.shields.io/badge/Multi--Agent-Communicating%20State%20Machine-success.svg)](#1-system-architecture)
 
-An enterprise-grade system demonstrating an **Autonomous Multi-Agent Retail Supply-Chain Defense Network**. The architecture pairs statistical time-series anomaly detection with causal semantic guardrails and an active inventory state machine to sense retail demand shocks in real-time and autonomously coordinate warehouse rebalancing actions.
+**StockSentinel** is an enterprise-grade **Autonomous Multi-Agent Supply Chain Defense Network**. Built on 365 days of real Walmart M5 retail data across 9,147 SKUs, it pairs statistical time-series anomaly detection with causal semantic guardrails and a zero-clamped physical inventory state machine to autonomously sense demand shocks, eliminate the bullwhip effect, and execute multi-echelon warehouse rebalancing.
 
 ---
 
 ## 1. System Architecture
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant Data as Real M5 POS Sales
-    participant Agent1 as Demand & Anomaly Agent (Detective)
-    participant Bus as Inter-Agent Protocol (JSON)
-    participant DB as SQLite ERP Ledger (inventory.db)
-    participant Agent2 as Inventory Agent (Operator)
-    participant UI as Live Streamlit Dashboard
+flowchart TD
+    classDef sensing fill:#1E293B,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC;
+    classDef reasoning fill:#1E293B,stroke:#FBBF24,stroke-width:2px,color:#F8FAFC;
+    classDef protocol fill:#0F172A,stroke:#818CF8,stroke-width:2px,color:#F8FAFC;
+    classDef execution fill:#1E293B,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
+    classDef ui fill:#1E293B,stroke:#EC4899,stroke-width:2px,color:#F8FAFC;
 
-    Data->>Agent1: Ingests Daily POS Time-Series (d_1 to d_365)
-    Agent1->>Agent1: Day-of-Week Seasonality (K=6, df=5) + Hysteresis (Z >= 2.5)
-    alt Anomaly Detected
-        Agent1->>Agent1: Evaluates Category-Event Semantic Guardrail
-        Agent1->>Agent1: Synthesizes Root Cause (Calendar, SNAP, or Statistical Shape)
-        Agent1->>Bus: Emits Anomaly Event Payload (JSON)
-        Bus->>Agent2: Dispatches Event (SKU, State, Spike Volume, Hypothesis)
-        Agent2->>DB: Queries Current Stock, Lead Time, Safety Buffer
-        DB-->>Agent2: Returns Warehouse Ledger Record
-        Agent2->>Agent2: Calculates Physical Stockout Runway (Days)
-        alt Runway <= Lead Time
-            Agent2->>Agent2: Formulates Emergency PO & Inter-Warehouse Stock Transfer
-        end
-        Agent2->>Bus: Emits Action Decision Payload (JSON)
+    subgraph L1 ["📡 Layer 1: Real-Time Demand Sensing"]
+        M5["📊 Real Walmart M5 POS Stream (9,147 SKUs • 365 Days)"]:::sensing
+        A1["🔍 Agent 1: Demand Detective<br/>• Rolling Mean μ ± 2σ Noise Tunnel<br/>• Hysteresis Trigger (Entry ≥ +2.5σ, Exit ≤ 1.0σ)<br/>• 3-Zone Rolling State Machine"]:::sensing
     end
-    Agent1->>UI: Streams Real-Time Anomaly Markers & Tooltips
-    Agent2->>UI: Updates Runway Gauges & Active Stockout Incident Banners
-    Bus->>UI: Streams Live Dialogue Cards (Agent 1 <-> Agent 2)
+
+    subgraph L2 ["🧠 Layer 2: Causal Intelligence & Guardrails"]
+        G1{"Category Affinity<br/>Guardrail"}:::reasoning
+        CAL["📅 Tier 1: Calendar Intelligence<br/>(SuperBowl, SNAP, Cultural Events)"]:::reasoning
+        SHP["📈 Tier 2/3: Statistical Shape Heuristics<br/>(B2B Impulse, Multi-Day Surge, Plateau)"]:::reasoning
+        REJECT["🛡️ Spurious Correlation Block<br/>(e.g., Bar SNAP on HOBBIES)"]:::reasoning
+    end
+
+    subgraph L3 ["⚡ Layer 3: Inter-Agent Protocol Handshake"]
+        BUS["🤝 Structured JSON Protocol Payload<br/>{SKU, Spike Units, Z-Score, Causal Diagnosis, Risk Brackets}"]:::protocol
+    end
+
+    subgraph L4 ["📦 Layer 4: Physical Warehouse Balancing & Ledger"]
+        DB[("💾 SQLite ERP Ledger (inventory.db)<br/>Safety Stock • Zero-Clamping • Lead Time=3d")]:::execution
+        A2["⚙️ Agent 2: Inventory Operator<br/>• Zero Stock Clamping & Backlog Accounting<br/>• Dual Runway Evaluation (Impulse vs Sustained)"]:::execution
+        DEC{"Runway ≤ 3-Day<br/>Lead Time?"}:::execution
+        TRANSFER["🔄 Emergency Inter-Warehouse Transfer<br/>(Nearest Regional Surplus Hub)"]:::execution
+        PO["📦 Expedited Standard Supplier PO"]:::execution
+        NORMAL["✅ Nominal Routine Replenishment"]:::execution
+    end
+
+    subgraph L5 ["💻 Layer 5: Operator Digital Twin Cockpit"]
+        DASH["⚡ StockSentinel Interactive Dashboard<br/>• Plotly Trajectory with Click-to-Jump Spike Diamonds<br/>• Dual Synchronized 365-Day Timeline Scrubbers<br/>• Live Multi-Agent Operations Dialogue Feed"]:::ui
+    end
+
+    M5 --> A1
+    A1 --> G1
+    G1 -- "Eligible Category" --> CAL
+    G1 -- "Ineligible (Spurious)" --> REJECT --> SHP
+    CAL --> BUS
+    SHP --> BUS
+    BUS --> A2
+    A2 <--> DB
+    A2 --> DEC
+    DEC -- "Critical Deficit" --> TRANSFER & PO
+    DEC -- "Safe Runway" --> NORMAL
+    TRANSFER & PO & NORMAL --> DASH
+    A1 -. "Live Telemetry" .-> DASH
 ```
+
+### Component Breakdown
+
+| Layer | Component | Core Responsibility | Output / Artifact |
+| :--- | :--- | :--- | :--- |
+| **1. Sensing** | `AnomalyDetectionEngine` | Day-of-week rolling baseline, $\pm2\sigma$ confidence tunnel, hysteresis state machine | Anomaly trigger ($Z \ge +2.5\sigma$) |
+| **2. Reasoning** | `RootCauseIntelligenceEngine` | Cross-category guardrail audit, holiday calendar matching, streak heuristics | Causal diagnosis (`SNAP`, `SuperBowl`, `B2B Impulse`) |
+| **3. Protocol** | `MultiAgentSystemOrchestrator` | Standardized agent-to-agent JSON contract | Inter-agent structured handshake payload |
+| **4. Execution** | `WarehouseInventoryEngine` | Zero-clamping, safety stock buffers, multi-echelon regional transfers | Idempotent SQLite state, emergency PO dispatch |
+| **5. Interface** | `app.py` (Streamlit + Plotly) | Single-screen operator cockpit with click-to-jump interactive trajectory | Real-time visual digital twin |
 
 ---
 
@@ -97,15 +129,15 @@ Mathematically ranked by Coefficient of Variation ($CV = \frac{\sigma}{\mu}$) an
 ## 5. Repository Structure
 
 ```
-├── data_m5_daily_365.csv      # Real extracted Walmart M5 dataset (9,147 series, 365 days)
-├── top_5_demo_skus.csv        # Curated top-variance demo products with metadata
-├── extract_m5_data.py         # M5 automated extraction pipeline
-├── verify_step1.py            # Integrity audit and calendar alignment script
-├── compute_step2_variance.py  # CV variance computation and SKU ranking
-├── save_curated_top5.py       # Final curated dataset generator
-├── app.py                     # Interactive Streamlit Multi-Agent Dashboard (In Progress)
+├── app.py                     # StockSentinel Interactive Digital Twin Cockpit (Streamlit + Plotly)
+├── anomaly_engine.py          # Time-Series Anomaly Detection (Rolling Baselines & Hysteresis Machine)
+├── reason_engine.py           # Root-Cause Intelligence (Semantic Guardrails & Streak Heuristics)
+├── inventory_engine.py        # SQLite Physical Warehouse Engine (Lead Time, Clamping, Transfers)
+├── agent_orchestrator.py      # Multi-Agent Coordination Protocol (Agent 1 <-> Agent 2 Handshake)
+├── data_m5_daily_365.csv      # Real Walmart M5 benchmark dataset (9,147 series, 365 days)
+├── top_5_demo_skus.csv        # Curated top-variance strategic archetypes with metadata
 ├── requirements.txt           # Production dependencies
-└── README.md                  # System architecture documentation
+└── README.md                  # Comprehensive System Architecture & Engineering Documentation
 ```
 
 ---
