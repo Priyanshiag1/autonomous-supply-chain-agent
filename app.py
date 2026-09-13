@@ -1,10 +1,10 @@
 """
-IntelliMark AI — Autonomous Demand-Sensing & Inventory Rebalancing Engine
--------------------------------------------------------------------------
+SignalTwin — Autonomous Demand-Sensing & Multi-Agent Inventory Rebalancing Digital Twin
+----------------------------------------------------------------------------------------
 Interactive Enterprise Dashboard (Streamlit + Plotly)
 Implements:
 1. Autonomous Historical Replay Simulation over Walmart M5 Benchmark (365 Days)
-2. Dual Navigation: Curated Hero Benchmarks (CEO Demo) + Full Catalog Explorer (9,147 SKUs)
+2. Dual Navigation: Curated Hero Benchmarks (Strategic Archetypes) + Full Catalog Explorer (9,147 SKUs)
 3. Idempotent State Simulation: Zero data drift across reloads & scrubber scrubbing
 4. Interactive Plotly Demand Curve with Rolling Baseline & Confidence Ribbon
 5. Live Multi-Agent Conversational Dialogue Feed (Agent 1 <-> Agent 2 Handshake)
@@ -28,7 +28,7 @@ from agent_orchestrator import MultiAgentSystemOrchestrator
 # 1. Page Configuration & Professional Enterprise Theme
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="IntelliMark AI • Autonomous Supply Chain Agent",
+    page_title="SignalTwin • Autonomous Supply Chain Agent",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -220,7 +220,7 @@ def run_continuous_simulation(sku_id: str, state_id: str, cat_id: str):
 # -----------------------------------------------------------------------------
 # 3. Sidebar Navigation: Strategic Archetypes vs Enterprise Catalog Explorer
 # -----------------------------------------------------------------------------
-st.sidebar.markdown("<div style='font-size:1.1rem; font-weight:800; color:#38BDF8;'>INTELLIMARK AI</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='font-size:1.2rem; font-weight:800; color:#38BDF8; letter-spacing:-0.02em;'>⚡ SignalTwin</div>", unsafe_allow_html=True)
 st.sidebar.markdown("<div style='font-size:0.75rem; color:#94A3B8; margin-bottom:12px;'>Autonomous Supply Chain Digital Twin</div>", unsafe_allow_html=True)
 
 # Unified Session State & URL Query Param Persistence
@@ -482,7 +482,7 @@ else:
 # -----------------------------------------------------------------------------
 # 5. Top Header & 5 Compact KPI Status Cards
 # -----------------------------------------------------------------------------
-st.markdown("<div class='system-title'>⚡ Autonomous Demand-Sensing & Inventory Rebalancing Engine</div>", unsafe_allow_html=True)
+st.markdown("<div class='system-title'>⚡ SignalTwin • Autonomous Demand-Sensing & Inventory Rebalancing</div>", unsafe_allow_html=True)
 st.markdown(f"<div class='system-subtitle'>Enterprise Digital Twin • SKU: <b>{current_sku}</b> | Region: <b>{current_state} Hub</b> | Timeline: <b>{date_str} (Day {current_day})</b></div>", unsafe_allow_html=True)
 
 kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
