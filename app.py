@@ -223,132 +223,79 @@ def run_continuous_simulation(sku_id: str, state_id: str, cat_id: str):
 st.sidebar.markdown("<div style='font-size:1.1rem; font-weight:800; color:#38BDF8;'>INTELLIMARK AI</div>", unsafe_allow_html=True)
 st.sidebar.markdown("<div style='font-size:0.75rem; color:#94A3B8; margin-bottom:12px;'>Autonomous Supply Chain Digital Twin</div>", unsafe_allow_html=True)
 
-nav_mode = st.sidebar.radio(
-    "Operational Mode:",
-    options=["🎯 Strategic Supply Chain Archetypes", "🔍 Enterprise Catalog Explorer (9,147 Series)"],
-    index=0
-)
-
-# Strategic Scenario Archetypes
-hero_scenarios = {
-    "🏈 SuperBowl Party Snacks (FOODS_3_090_TX)": {
-        "sku_id": "FOODS_3_090_TX_1_validation",
-        "state_id": "TX",
-        "cat_id": "FOODS",
-        "default_day": 9,
-        "description": "SuperBowl Sunday spike (Day 9). Single-day surge with comfortable stock & standby PO."
-    },
-    "💥 86x Mega SNAP Outlier & Stockout (FOODS_2_285_TX)": {
-        "sku_id": "FOODS_2_285_TX_1_validation",
-        "state_id": "TX",
-        "cat_id": "FOODS",
-        "default_day": 98,
-        "description": "Massive 86.6x SNAP welfare shock. Physical zero-clamping, CA transfer & factory PO."
-    },
-    "🛡️ Toys & Crafts SNAP Defense (HOBBIES_1_209_TX)": {
-        "sku_id": "HOBBIES_1_209_TX_1_validation",
-        "state_id": "TX",
-        "cat_id": "HOBBIES",
-        "default_day": 126,
-        "description": "Spurious SNAP welfare flag rejected by Category Guardrail. Diagnosed as B2B Wholesale."
-    },
-    "📦 Cleaners Single-Day Impulse (HOUSEHOLD_2_440_TX)": {
-        "sku_id": "HOUSEHOLD_2_440_TX_1_validation",
-        "state_id": "TX",
-        "cat_id": "HOUSEHOLD",
-        "default_day": 332,
-        "description": "Post-Christmas single-day commercial impulse. Unmarked anomaly."
-    },
-    "📈 Multi-Day Cleaner Plateau & Pipeline (HOUSEHOLD_2_440_TX)": {
-        "sku_id": "HOUSEHOLD_2_440_TX_1_validation",
-        "state_id": "TX",
-        "cat_id": "HOUSEHOLD",
-        "default_day": 343,
-        "description": "Consecutive multi-day surge. Tests pipeline tracking, anti-bullwhip & fragile recovery."
-    }
-}
-
-scenario_keys = list(hero_scenarios.keys())
-
-if "active_scenario_name" not in st.session_state:
-    st.session_state.active_scenario_name = scenario_keys[0]
+# Unified Session State Management
+if "selected_sku_id" not in st.session_state:
+    st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
 if "current_day_num" not in st.session_state:
-    st.session_state.current_day_num = hero_scenarios[st.session_state.active_scenario_name]['default_day']
+    st.session_state.current_day_num = 9
 
-if nav_mode == "🎯 Strategic Supply Chain Archetypes":
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("<div style='font-size:0.8rem; font-weight:700; color:#CBD5E1;'>Critical Operating Windows:</div>", unsafe_allow_html=True)
+# 1. Pinned Strategic Archetypes (Quick Jump Shortcuts)
+st.sidebar.markdown("<div style='font-size:0.82rem; font-weight:700; color:#CBD5E1; margin-bottom:6px;'>📌 Pinned Strategic Scenarios:</div>", unsafe_allow_html=True)
 
-    col_b1, col_b2 = st.sidebar.columns(2)
-    with col_b1:
-        if st.button("🏈 Day 9 (SuperBowl)", use_container_width=True):
-            st.session_state.active_scenario_name = scenario_keys[0]
-            st.session_state.current_day_num = 9
-            st.rerun()
-        if st.button("🛡️ Day 126 (Guardrail)", use_container_width=True):
-            st.session_state.active_scenario_name = scenario_keys[2]
-            st.session_state.current_day_num = 126
-            st.rerun()
-        if st.button("📈 Day 343 (Plateau)", use_container_width=True):
-            st.session_state.active_scenario_name = scenario_keys[4]
-            st.session_state.current_day_num = 343
-            st.rerun()
-    with col_b2:
-        if st.button("💥 Day 98 (Mega SNAP)", use_container_width=True):
-            st.session_state.active_scenario_name = scenario_keys[1]
-            st.session_state.current_day_num = 98
-            st.rerun()
-        if st.button("📦 Day 332 (Impulse)", use_container_width=True):
-            st.session_state.active_scenario_name = scenario_keys[3]
-            st.session_state.current_day_num = 332
-            st.rerun()
-
-    current_idx = scenario_keys.index(st.session_state.active_scenario_name) if st.session_state.active_scenario_name in scenario_keys else 0
-
-    selected_scenario_name = st.sidebar.selectbox(
-        "Select Strategic Scenario:",
-        options=scenario_keys,
-        index=current_idx
-    )
-
-    if selected_scenario_name != st.session_state.active_scenario_name:
-        st.session_state.active_scenario_name = selected_scenario_name
-        st.session_state.current_day_num = hero_scenarios[selected_scenario_name]['default_day']
+col_b1, col_b2 = st.sidebar.columns(2)
+with col_b1:
+    if st.button("🏈 Day 9 (SuperBowl)", use_container_width=True):
+        st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
+        st.session_state.current_day_num = 9
+        st.rerun()
+    if st.button("🛡️ Day 126 (Guardrail)", use_container_width=True):
+        st.session_state.selected_sku_id = "HOBBIES_1_209_TX_1_validation"
+        st.session_state.current_day_num = 126
+        st.rerun()
+    if st.button("📈 Day 343 (Plateau)", use_container_width=True):
+        st.session_state.selected_sku_id = "HOUSEHOLD_2_440_TX_1_validation"
+        st.session_state.current_day_num = 343
+        st.rerun()
+with col_b2:
+    if st.button("💥 Day 98 (Mega SNAP)", use_container_width=True):
+        st.session_state.selected_sku_id = "FOODS_2_285_TX_1_validation"
+        st.session_state.current_day_num = 98
+        st.rerun()
+    if st.button("📦 Day 332 (Impulse)", use_container_width=True):
+        st.session_state.selected_sku_id = "HOUSEHOLD_2_440_TX_1_validation"
+        st.session_state.current_day_num = 332
         st.rerun()
 
-    selected_scenario = hero_scenarios[st.session_state.active_scenario_name]
-    current_sku = selected_scenario['sku_id']
-    current_state = selected_scenario['state_id']
-    current_cat = selected_scenario['cat_id']
+# 2. Always-Visible Live Catalog Search (9,147 Products)
+st.sidebar.markdown("---")
+st.sidebar.markdown("<div style='font-size:0.82rem; font-weight:700; color:#38BDF8; margin-bottom:6px;'>🔍 Live Catalog Search (9,147 SKUs):</div>", unsafe_allow_html=True)
 
+col_f1, col_f2 = st.sidebar.columns(2)
+with col_f1:
+    f_cat = st.selectbox("Category:", ["All", "FOODS", "HOBBIES", "HOUSEHOLD"], index=0)
+with col_f2:
+    f_state = st.selectbox("Region:", ["All", "TX", "CA", "WI"], index=0)
+
+filtered_df = m5_df.copy()
+if f_cat != "All":
+    filtered_df = filtered_df[filtered_df['cat_id'] == f_cat]
+if f_state != "All":
+    filtered_df = filtered_df[filtered_df['state_id'] == f_state]
+
+sku_options = filtered_df['id'].tolist()
+if not sku_options:
+    sku_options = m5_df['id'].tolist()
+
+if st.session_state.selected_sku_id in sku_options:
+    sku_idx = sku_options.index(st.session_state.selected_sku_id)
 else:
-    # Full Catalog Explorer (All 9,147 Series)
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("<div style='font-size:0.8rem; font-weight:700; color:#38BDF8;'>🔍 Catalog Explorer Filters:</div>", unsafe_allow_html=True)
-    
-    f_cat = st.sidebar.selectbox("Filter Category:", ["All", "FOODS", "HOBBIES", "HOUSEHOLD"])
-    f_state = st.sidebar.selectbox("Filter State:", ["All", "TX", "CA", "WI"])
-    
-    filtered_df = m5_df.copy()
-    if f_cat != "All":
-        filtered_df = filtered_df[filtered_df['cat_id'] == f_cat]
-    if f_state != "All":
-        filtered_df = filtered_df[filtered_df['state_id'] == f_state]
-        
-    sku_options = filtered_df['id'].tolist()
-    
-    if not sku_options:
-        sku_options = m5_df['id'].tolist()
-        
-    current_sku = st.sidebar.selectbox(
-        f"Select SKU ({len(sku_options):,} series available):",
-        options=sku_options,
-        index=0
-    )
-    
-    sku_row_meta = m5_df[m5_df['id'] == current_sku].iloc[0]
-    current_state = sku_row_meta['state_id']
-    current_cat = sku_row_meta['cat_id']
+    sku_options.insert(0, st.session_state.selected_sku_id)
+    sku_idx = 0
+
+chosen_sku = st.sidebar.selectbox(
+    f"Active Product ({len(sku_options):,} available):",
+    options=sku_options,
+    index=sku_idx
+)
+
+if chosen_sku != st.session_state.selected_sku_id:
+    st.session_state.selected_sku_id = chosen_sku
+    st.rerun()
+
+current_sku = st.session_state.selected_sku_id
+sku_row_meta = m5_df[m5_df['id'] == current_sku].iloc[0]
+current_state = sku_row_meta['state_id']
+current_cat = sku_row_meta['cat_id']
 
 # Timeline Slider
 st.sidebar.markdown("---")
