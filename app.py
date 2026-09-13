@@ -147,6 +147,72 @@ st.markdown("""
         color: #94A3B8;
         margin-bottom: 10px;
     }
+
+    /* High-Contrast Tab Styling */
+    button[data-baseweb="tab"] {
+        color: #CBD5E1 !important;
+        font-size: 0.86rem !important;
+        font-weight: 600 !important;
+        background-color: transparent !important;
+        padding: 8px 16px !important;
+        border-radius: 6px 6px 0 0 !important;
+        opacity: 1 !important;
+    }
+    button[data-baseweb="tab"]:hover {
+        color: #38BDF8 !important;
+        background-color: rgba(56, 189, 248, 0.06) !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #38BDF8 !important;
+        border-bottom: 2px solid #38BDF8 !important;
+        background-color: rgba(56, 189, 248, 0.1) !important;
+    }
+    
+    /* Code tag contrast (avoid white pill backgrounds) */
+    code {
+        background-color: #1E293B !important;
+        color: #38BDF8 !important;
+        border: 1px solid #334155 !important;
+        border-radius: 4px !important;
+        padding: 2px 6px !important;
+        font-size: 0.78rem !important;
+        font-family: 'Fira Code', 'Courier New', monospace !important;
+    }
+
+    /* Expander visibility */
+    details[data-testid="stExpander"] {
+        border: 1px solid #1F2B48 !important;
+        background-color: #0F172A !important;
+        border-radius: 8px !important;
+    }
+    details[data-testid="stExpander"] summary {
+        color: #F8FAFC !important;
+        font-weight: 700 !important;
+        font-size: 0.88rem !important;
+    }
+    details[data-testid="stExpander"] summary:hover {
+        color: #38BDF8 !important;
+    }
+
+    /* Buttons high-contrast */
+    .stButton > button {
+        background-color: #131B2E !important;
+        color: #F1F5F9 !important;
+        border: 1px solid #24355A !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+    }
+    .stButton > button:hover {
+        background-color: #1E293B !important;
+        color: #38BDF8 !important;
+        border-color: #38BDF8 !important;
+    }
+
+    /* Captions & subtext */
+    .stCaption, div[data-testid="stCaptionContainer"] {
+        color: #94A3B8 !important;
+        font-size: 0.78rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -897,22 +963,23 @@ with st.expander("🗄️ Multi-Warehouse Topology & Live SQLite ERP Database In
     with tab_sqlite:
         sim_db_path = f"sim_{current_sku[:12]}_{current_state}.db"
         st.markdown(f"""
-        <div style='background:#0F172A; border:1px solid #1E293B; border-radius:6px; padding:8px 12px; margin-bottom:10px; font-size:0.75rem; color:#94A3B8;'>
+        <div style='background:#131B2E; border:1px solid #1F2B48; border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:0.82rem; color:#E2E8F0;'>
             💾 <b>Physical SQLite Database:</b> <code>{sim_db_path}</code> &nbsp;|&nbsp; 
             <b>Storage Engine:</b> SQLite3 ACID Relational Ledger &nbsp;|&nbsp; 
-            <b>Live Filter:</b> Transactions up to Day {current_day}
+            <b>Live Active Day:</b> Day {current_day}
         </div>
         """, unsafe_allow_html=True)
         
         sub_ledger, sub_shipments, sub_master = st.tabs([
-            "📋 Daily Transaction Ledger (`inventory_daily_ledger`)",
-            "🚛 Inbound Highway Orders (`inbound_shipments`)",
-            "🏢 Multi-Echelon Stock Master (`warehouse_inventory`)"
+            "📋 Daily Transaction Ledger",
+            "🚛 Inbound Highway Orders",
+            "🏢 Multi-Echelon Stock Master"
         ])
         
         try:
             with sqlite3.connect(sim_db_path) as conn:
                 with sub_ledger:
+                    st.markdown("<div style='color:#94A3B8; font-size:0.8rem; margin-bottom:6px;'>Physical Table: <code>inventory_daily_ledger</code> (Immutable Accounting Trail)</div>", unsafe_allow_html=True)
                     q_ledger = """
                         SELECT day_index as Day, 
                                opening_stock as 'Opening Stock', 
@@ -933,6 +1000,7 @@ with st.expander("🗄️ Multi-Warehouse Topology & Live SQLite ERP Database In
                     st.caption(f"Showing last 15 days of physical warehouse ledger accounting ending on active Day {current_day}")
 
                 with sub_shipments:
+                    st.markdown("<div style='color:#94A3B8; font-size:0.8rem; margin-bottom:6px;'>Physical Table: <code>inbound_shipments</code> (Supplier POs & Regional In-Transit Transfers)</div>", unsafe_allow_html=True)
                     q_ship = """
                         SELECT shipment_id as 'Shipment ID',
                                shipment_type as 'Type',
@@ -951,6 +1019,7 @@ with st.expander("🗄️ Multi-Warehouse Topology & Live SQLite ERP Database In
                     st.caption(f"Active in-transit highway pipeline and delivered shipments as of Day {current_day}")
 
                 with sub_master:
+                    st.markdown("<div style='color:#94A3B8; font-size:0.8rem; margin-bottom:6px;'>Physical Table: <code>warehouse_inventory</code> (Multi-Echelon State Hub Stock & Safety Buffers)</div>", unsafe_allow_html=True)
                     q_master = """
                         SELECT sku_id as 'SKU ID',
                                state_id as 'Regional Hub',
