@@ -227,6 +227,29 @@ st.sidebar.markdown("<div style='font-size:0.75rem; color:#94A3B8; margin-bottom
 qp_sku = st.query_params.get("sku", None)
 qp_day = st.query_params.get("day", None)
 
+# Handle pending programmatic jumps (graph clicks / jump pills) BEFORE slider widgets are instantiated
+if "pending_jump_sku" in st.session_state:
+    st.session_state.selected_sku_id = st.session_state.pending_jump_sku
+    st.query_params["sku"] = st.session_state.pending_jump_sku
+    del st.session_state.pending_jump_sku
+
+if "pending_jump_day" in st.session_state:
+    target_d = st.session_state.pending_jump_day
+    st.session_state.current_day_num = target_d
+    st.session_state.slider_sidebar = target_d
+    st.session_state.slider_main = target_d
+    st.query_params["day"] = str(target_d)
+    del st.session_state.pending_jump_day
+elif qp_day:
+    try:
+        init_day = int(qp_day)
+        if 1 <= init_day <= 365 and ("current_day_num" not in st.session_state or st.session_state.current_day_num != init_day):
+            st.session_state.current_day_num = init_day
+            st.session_state.slider_sidebar = init_day
+            st.session_state.slider_main = init_day
+    except (ValueError, TypeError):
+        pass
+
 if "selected_sku_id" not in st.session_state:
     if qp_sku and (qp_sku in m5_df['id'].values):
         st.session_state.selected_sku_id = qp_sku
@@ -234,11 +257,7 @@ if "selected_sku_id" not in st.session_state:
         st.session_state.selected_sku_id = "FOODS_3_090_TX_1_validation"
 
 if "current_day_num" not in st.session_state:
-    try:
-        init_day = int(qp_day) if qp_day else 9
-        st.session_state.current_day_num = max(1, min(365, init_day))
-    except (ValueError, TypeError):
-        st.session_state.current_day_num = 9
+    st.session_state.current_day_num = 9
 
 if "slider_sidebar" not in st.session_state:
     st.session_state.slider_sidebar = st.session_state.current_day_num
@@ -586,10 +605,7 @@ with col_chart:
                 spk_z_val = spike_z[spk_idx]
                 label = f"Day {spk_d} ({spk_z_val:+.1f}σ)"
                 if st.button(f"⚡ {label}", key=f"btn_jump_{current_sku}_{spk_d}", use_container_width=True):
-                    st.session_state.current_day_num = spk_d
-                    st.session_state.slider_sidebar = spk_d
-                    st.session_state.slider_main = spk_d
-                    st.query_params["day"] = str(spk_d)
+                    st.session_state.pending_jump_day = spk_d
                     st.rerun()
 
     fig = go.Figure()
@@ -715,10 +731,7 @@ with col_chart:
                 try:
                     t_day = int(target_jump_day)
                     if 1 <= t_day <= 365 and t_day != current_day:
-                        st.session_state.current_day_num = t_day
-                        st.session_state.slider_sidebar = t_day
-                        st.session_state.slider_main = t_day
-                        st.query_params["day"] = str(t_day)
+                        st.session_state.pending_jump_day = t_day
                         st.rerun()
                 except (ValueError, TypeError):
                     pass
